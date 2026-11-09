@@ -48,7 +48,12 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon assembleRelease
+          for attempt in 1 2 3; do
+            ./gradlew --no-daemon assembleRelease && exit 0
+            echo "::warning::Сборка не удалась (попытка $attempt), повтор"
+            sleep 15
+          done
+          exit 1
 
       - name: Подготовить файл релиза
         run: |
