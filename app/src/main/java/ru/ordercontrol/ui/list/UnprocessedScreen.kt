@@ -24,6 +24,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -521,6 +522,22 @@ private fun RecordCard(
     RecordCardShell(
         record = item.record,
         headerTrailing = DisplayFormat.callTime(item.record.incomingAt),
+        headerAction = phone?.let { number ->
+            {
+                IconButton(
+                    onClick = {
+                        context.startActivity(
+                            Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number")),
+                        )
+                    },
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Phone,
+                        contentDescription = stringResource(R.string.action_call),
+                    )
+                }
+            }
+        },
     ) {
         item.previousOrder?.let { previous ->
             Spacer(Modifier.height(2.dp))
@@ -536,19 +553,6 @@ private fun RecordCard(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (phone != null) {
-                OutlinedButton(
-                    onClick = {
-                        context.startActivity(
-                            Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone")),
-                        )
-                    },
-                    contentPadding = PaddingValues(horizontal = 4.dp),
-                    modifier = Modifier.weight(1f),
-                ) {
-                    CardActionText(stringResource(R.string.action_call))
-                }
-            }
             OutlinedButton(
                 onClick = onEdit,
                 contentPadding = PaddingValues(horizontal = 4.dp),
