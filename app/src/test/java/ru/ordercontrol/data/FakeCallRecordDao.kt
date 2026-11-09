@@ -30,7 +30,7 @@ class FakeCallRecordDao : CallRecordDao {
     fun byId(id: Long): CallRecord? = records.firstOrNull { it.id == id }
 
     override fun observeOpen(): Flow<List<CallRecord>> = changes.map {
-        records.filter { !it.isProcessed }.sortedByDescending { it.incomingAt }
+        records.filter { !it.isProcessed }.sortedBy { it.incomingAt }
     }
 
     override suspend fun openRecords(): List<CallRecord> =

@@ -61,10 +61,10 @@
     <string name="main_one_processed_toast">Запись отмечена обработанной</string>
     <string name="badge_skipped">не клиент</string>
     <string name="badge_silent">тихо</string>
-    <string name="badge_delivery_tomorrow">завтра</string>
-    <string name="badge_delivery_day_after_tomorrow">послезавтра</string>
-    <string name="badge_delivery_monday">в понедельник</string>
-    <string name="badge_delivery_other_day">другой день</string>
+    <string name="badge_delivery_tomorrow">Доставка завтра</string>
+    <string name="badge_delivery_day_after_tomorrow">Доставка послезавтра</string>
+    <string name="badge_delivery_monday">Доставка в понедельник</string>
+    <string name="badge_delivery_other_day">Доставка в другой день</string>
     <string name="badge_answered">принят</string>
     <string name="badge_missed">пропущен</string>
     <string name="hidden_number">Скрытый номер</string>

@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ru.ordercontrol.R
 import ru.ordercontrol.domain.DeliveryDay
@@ -70,16 +71,37 @@ fun BadgeRow(
 ) {
     if (!skipped && !silent && deliveryDay == null && answered == null) return
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        CallStatusBadge(answered)
         if (deliveryDay != null) {
-            Badge(text = stringResource(deliveryDay.badgeRes()))
+            DeliveryBadge(deliveryDay)
         }
+        CallStatusBadge(answered)
         if (skipped) {
             Badge(text = stringResource(R.string.badge_skipped))
         }
         if (silent) {
             Badge(text = stringResource(R.string.badge_silent))
         }
+    }
+}
+
+/**
+ * День доставки: заметная залитая плашка. Заказ на будущий день не должен
+ * теряться среди сегодняшних.
+ */
+@Composable
+fun DeliveryBadge(deliveryDay: DeliveryDay, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary,
+    ) {
+        Text(
+            text = stringResource(deliveryDay.badgeRes()),
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
+        )
     }
 }
 

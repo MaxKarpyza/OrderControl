@@ -10,7 +10,7 @@ import ru.ordercontrol.domain.CloseReason
 @Dao
 interface CallRecordDao {
 
-    @Query("SELECT * FROM call_records WHERE isProcessed = 0 ORDER BY incomingAt DESC, id DESC")
+    @Query("SELECT * FROM call_records WHERE isProcessed = 0 ORDER BY incomingAt ASC, id ASC")
     fun observeOpen(): Flow<List<CallRecord>>
 
     @Query("SELECT * FROM call_records WHERE isProcessed = 0 ORDER BY incomingAt DESC, id DESC")

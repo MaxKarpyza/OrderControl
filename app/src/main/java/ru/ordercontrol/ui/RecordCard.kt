@@ -1,5 +1,6 @@
 package ru.ordercontrol.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -50,11 +51,21 @@ fun RecordCardShell(
     headerAction: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
+    val futureDelivery = record.deliveryDay != null
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = if (futureDelivery) {
+                MaterialTheme.colorScheme.tertiaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant
+            },
         ),
+        border = if (futureDelivery) {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary)
+        } else {
+            null
+        },
     ) {
         Column(
             modifier = Modifier
