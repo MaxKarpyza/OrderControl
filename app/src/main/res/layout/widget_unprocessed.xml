@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_unprocessed_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_widget_calm"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:id="@+id/widget_badge_icon"
+            android:layout_width="14dp"
+            android:layout_height="14dp"
+            android:contentDescription="@null"
+            android:src="@drawable/ic_widget_check" />
+
+        <TextView
+            android:id="@+id/widget_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:letterSpacing="0.08"
+            android:text="@string/widget_unprocessed_label"
+            android:textAllCaps="true"
+            android:textColor="@color/widget_calm_muted"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+
+        <ImageView
+            android:id="@+id/widget_chevron"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:contentDescription="@null"
+            android:src="@drawable/ic_widget_chevron" />
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <TextView
+        android:id="@+id/widget_count"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:fontFamily="sans-serif-medium"
+        android:includeFontPadding="false"
+        android:text="@string/widget_zero"
+        android:textColor="@color/widget_calm_text"
+        android:textSize="36sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/widget_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="1dp"
+        android:text="@string/widget_all_done"
+        android:textColor="@color/widget_calm_text"
+        android:textSize="12sp" />
+
+    <LinearLayout
+        android:id="@+id/widget_breakdown"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="3dp"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/widget_answered"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="10dp"
+            android:textColor="@color/widget_answered_text"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_missed"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/widget_missed_text"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+</LinearLayout>

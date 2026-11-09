@@ -1,0 +1,18 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+.kotlin/
+.DS_Store
+keystore.properties
+*.jks
+*.keystore
+
+# Распакованный Kotlin-компилятор в корне (не часть проекта).
+/org/
+/META-INF/
+/messages/
+/kotlin/
+/misc/
+/kotlinManifest.properties

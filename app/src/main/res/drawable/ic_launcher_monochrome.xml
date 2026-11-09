@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Одноцветный вариант: капля с вырезанной трубкой. -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M54,22 C62,36 76,50 76,64 A22,22 0 0 1 32,64 C32,50 46,36 54,22 Z M49.1,58.9c1.3,2.6 3.5,4.7 6.1,6.1l2,-2c0.25,-0.25 0.62,-0.33 0.94,-0.22 1,0.34 2.1,0.52 3.3,0.52 0.5,0 0.9,0.4 0.9,0.9v3.2c0,0.5 -0.4,0.9 -0.9,0.9 -8.4,0 -15.2,-6.8 -15.2,-15.2 0,-0.5 0.4,-0.9 0.9,-0.9h3.2c0.5,0 0.9,0.4 0.9,0.9 0,1.15 0.18,2.26 0.52,3.3 0.1,0.32 0.03,0.68 -0.23,0.94l-2,2z" />
+</vector>

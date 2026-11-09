@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Заказы воды</string>
+
+    <!-- Виджеты -->
+    <string name="widget_orders_description">Записать заказ</string>
+    <string name="widget_unprocessed_description">Незаписанные звонки</string>
+    <string name="widget_unprocessed_label">Незаписанные</string>
+    <string name="widget_zero">0</string>
+    <string name="widget_all_done">Всё обработано</string>
+    <string name="widget_waiting_one">запись ждёт обработки</string>
+    <string name="widget_waiting_few">записи ждут обработки</string>
+    <string name="widget_waiting_many">записей ждут обработки</string>
+    <string name="widget_answered">Принято %1$d</string>
+    <string name="widget_missed">Пропущено %1$d</string>
+
+    <!-- Онбординг -->
+    <string name="onboarding_title">Настройка</string>
+    <string name="onboarding_intro">Приложению нужны доступы, чтобы замечать входящие звонки и обновлять виджеты.</string>
+    <string name="permission_phone_state">Телефон — определять входящие звонки</string>
+    <string name="permission_call_log">Журнал звонков — номер и длительность</string>
+    <string name="permission_contacts">Контакты — имя звонящего</string>
+    <string name="permission_contacts_write">Контакты — создавать новых клиентов</string>
+    <string name="permission_granted">Разрешено</string>
+    <string name="permission_denied">Не разрешено</string>
+    <string name="permission_grant">Разрешить доступы</string>
+    <string name="onboarding_required_hint">Без разрешений «Телефон» и «Журнал звонков» приложение не сможет записывать звонки.</string>
+    <string name="battery_title">Оптимизация батареи</string>
+    <string name="battery_explanation">Без исключения система может пропускать звонки и не обновлять виджет.</string>
+    <string name="battery_grant">Отключить оптимизацию</string>
+    <string name="battery_granted">Оптимизация отключена</string>
+    <string name="account_title">Куда сохранять новых клиентов</string>
+    <string name="account_google">Google-аккаунт</string>
+    <string name="account_local">Локальная книга устройства</string>
+    <string name="account_none">Google-аккаунт не найден. Новые контакты будут сохраняться в локальную книгу устройства.</string>
+    <string name="onboarding_start">Начать работу</string>
+
+    <!-- Экран необработанных -->
+    <string name="main_title">Незаписанные</string>
+    <string name="main_empty">Нет необработанных звонков</string>
+    <string name="main_empty_hint">После звонка запись появится здесь.</string>
+    <string name="main_mark_processed">Заказы обработаны</string>
+    <string name="main_confirm_processed_title">Точно все обработано?</string>
+    <string name="main_confirm_processed_text">Все необработанные записи будут закрыты и перенесены в историю.</string>
+    <string name="main_confirm_processed_checkbox">Я проверил: все обработано</string>
+    <string name="main_confirm_one_title">Точно записал адрес?</string>
+    <string name="main_confirm_one_text">Запись будет отмечена обработанной и уйдёт в историю.</string>
+    <string name="main_confirm_one_address">Адрес: %1$s</string>
+    <string name="main_processed_toast">Все заказы отмечены обработанными</string>
+    <string name="main_settings">Настройки</string>
+    <string name="main_bottles">Бутыли</string>
+    <string name="main_phone">Телефон</string>
+    <string name="main_phone_unknown">не определён</string>
+    <string name="main_address">Адрес</string>
+    <string name="main_previous_prefix">раньше</string>
+    <string name="main_not_filled">не заполнено</string>
+    <string name="main_total">Всего: %1$d</string>
+    <string name="main_error">Не удалось выполнить действие</string>
+    <string name="main_edit">Изменить</string>
+    <string name="main_mark_one_processed">Обработан</string>
+    <string name="main_one_processed_toast">Запись отмечена обработанной</string>
+    <string name="badge_skipped">не клиент</string>
+    <string name="badge_silent">тихо</string>
+    <string name="badge_delivery_tomorrow">завтра</string>
+    <string name="badge_delivery_day_after_tomorrow">послезавтра</string>
+    <string name="badge_delivery_monday">в понедельник</string>
+    <string name="badge_delivery_other_day">другой день</string>
+    <string name="badge_answered">принят</string>
+    <string name="badge_missed">пропущен</string>
+    <string name="hidden_number">Скрытый номер</string>
+
+    <!-- Вкладки -->
+    <string name="tab_unprocessed">Незаписанные</string>
+    <string name="tab_history">История</string>
+
+    <!-- История -->
+    <string name="history_empty">Нет обработанных заявок</string>
+    <string name="history_empty_hint">Здесь появятся заявки, отмеченные обработанными.</string>
+    <string name="history_total">Обработано: %1$d</string>
+    <string name="history_call_time">Звонок</string>
+    <string name="history_processed_time">Обработан</string>
+    <string name="history_search_hint">Поиск по контактам и адресам</string>
+    <string name="history_search_clear">Очистить поиск</string>
+    <string name="history_search_empty">Ничего не найдено</string>
+    <string name="history_search_empty_hint">Попробуйте изменить запрос.</string>
+    <string name="history_restore">Вернуть в необработанные</string>
+    <string name="history_restored">Запись возвращена в необработанные</string>
+
+    <!-- Проверка по Google Таблице -->
+    <string name="sheet_check">Проверить таблицу</string>
+    <string name="sheet_check_loading">Проверяем таблицу…</string>
+    <string name="sheet_dialog_title">Проверка таблицы</string>
+    <string name="sheet_closed">Закрыто: %1$d</string>
+    <string name="sheet_result">Вкладки: %1$s. Адресов в таблице: %2$d. Закрыто: %3$d.</string>
+    <string name="sheet_no_address">В необработанных звонках нет адресов — сверять нечего.</string>
+    <string name="sheet_no_match">Ни один адрес не совпал с таблицей.</string>
+    <string name="sheet_bottles_mismatch">Количество в таблице отличается у %1$d записей</string>
+    <string name="sheet_ambiguous_title">Неполные совпадения</string>
+    <string name="sheet_record_address">В приложении: %1$s</string>
+    <string name="sheet_row_address">В таблице: %1$s</string>
+    <string name="sheet_same_address">Это тот же адрес</string>
+    <string name="sheet_other_address">Не тот же адрес</string>
+    <string name="sheet_alias_rejected">Запомнили: адреса разные</string>
+    <string name="sheet_alias_saved">Синоним сохранён</string>
+    <string name="sheet_alias_error">Не удалось сохранить синоним</string>
+    <string name="sheet_no_network">Нет сети. Проверьте подключение.</string>
+    <string name="sheet_failure">Не удалось прочитать таблицу</string>
+
+    <!-- Настройки -->
+    <string name="settings_title">Рабочее время</string>
+    <string name="settings_from">С</string>
+    <string name="settings_to">До</string>
+    <string name="settings_days">Рабочие дни</string>
+    <string name="settings_hint">Пропущенные звонки вне этого окна не создают записей. Отвеченные звонки создают тихие записи.</string>
+    <string name="settings_save">Сохранить</string>
+    <string name="settings_version">Версия %1$s</string>
+    <string name="settings_invalid">Выберите хотя бы один рабочий день</string>
+
+    <!-- Обновления -->
+    <string name="update_section_title">Обновления</string>
+    <string name="update_check">Проверить обновление</string>
+    <string name="update_checking">Проверяем обновление…</string>
+    <string name="update_up_to_date">Установлена последняя версия</string>
+    <string name="update_available">Доступна версия %1$s</string>
+    <string name="update_no_network">Нет сети. Проверьте подключение.</string>
+    <string name="update_failed">Не удалось проверить обновление</string>
+    <string name="update_download">Скачать и установить</string>
+    <string name="update_action">Обновить</string>
+    <string name="update_downloading">Загрузка… %1$d%%</string>
+    <string name="update_download_failed">Не удалось скачать обновление</string>
+    <string name="update_install_failed">Не удалось запустить установку</string>
+    <string name="update_allow_install">Разрешите установку приложений из этого источника, затем нажмите «Скачать и установить» ещё раз.</string>
+    <string name="update_allow_install_action">Открыть настройки</string>
+    <string name="day_monday">Понедельник</string>
+    <string name="day_tuesday">Вторник</string>
+    <string name="day_wednesday">Среда</string>
+    <string name="day_thursday">Четверг</string>
+    <string name="day_friday">Пятница</string>
+    <string name="day_saturday">Суббота</string>
+    <string name="day_sunday">Воскресенье</string>
+
+    <!-- Мини-форма -->
+    <string name="form_bottles">Бутыли</string>
+    <string name="form_bottles_hint">Например, 2 по 19 л</string>
+    <string name="form_address">Адрес</string>
+    <string name="form_address_hint">Улица, дом, квартира</string>
+    <string name="form_address_from_contact">Подставится контакт: %1$s</string>
+    <string name="form_another_address">Ещё адрес</string>
+    <string name="form_delivery_day">День доставки</string>
+    <string name="delivery_tomorrow">Завтра</string>
+    <string name="delivery_day_after_tomorrow">Послезавтра</string>
+    <string name="delivery_monday">Понедельник</string>
+    <string name="delivery_other_day">Другой день</string>
+    <string name="form_name">Имя</string>
+    <string name="form_name_hint">Новый контакт</string>
+    <string name="form_name_note">Контакт будет создан в телефонной книге</string>
+    <string name="form_skip">Не клиент</string>
+    <string name="form_skip_permanent">Постоянно</string>
+    <string name="form_skip_once">Только до следующего звонка</string>
+    <string name="form_previous">Предыдущий звонок</string>
+    <string name="form_save">Сохранить и закрыть</string>
+    <string name="form_close">Закрыть</string>
+    <string name="form_no_records">Нет необработанных звонков</string>
+    <string name="form_no_records_hint">Форма откроется после входящего звонка.</string>
+    <string name="form_time">Звонок</string>
+    <string name="form_save_error">Не удалось сохранить. Попробуйте ещё раз.</string>
+    <string name="form_contact_error">Заказ сохранён, но контакт создать не удалось: проверьте доступ к телефонной книге.</string>
+    <string name="form_discard_title">Закрыть без сохранения?</string>
+    <string name="form_discard_text">Введённые бутыли и адрес будут потеряны.</string>
+    <string name="form_discard_confirm">Закрыть</string>
+    <string name="form_discard_cancel">Продолжить ввод</string>
+    <string name="action_close">Закрыть</string>
+    <string name="action_back">Назад</string>
+    <string name="action_call">Позвонить</string>
+    <string name="action_yes">Да</string>
+    <string name="action_no">Нет</string>
+</resources>

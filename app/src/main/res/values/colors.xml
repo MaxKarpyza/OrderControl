@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#E8F2F8</color>
+    <color name="calm_background">#E9F5EF</color>
+    <color name="alert_background">#FDECEA</color>
+    <color name="status_bar_color">#E8F2F8</color>
+    <color name="widget_calm_text">#FF1B5E20</color>
+    <color name="widget_alert_text">#FFB71C1C</color>
+    <color name="widget_calm_muted">#991B5E20</color>
+    <color name="widget_alert_muted">#99B71C1C</color>
+    <color name="widget_answered_text">#FF2E7D32</color>
+    <color name="widget_missed_text">#FFC62828</color>
+    <color name="widget_icon">#FF1B5E20</color>
+</resources>
