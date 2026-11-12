@@ -49,9 +49,10 @@ fun RecordCardShell(
     record: CallRecord,
     headerTrailing: String? = null,
     headerAction: (@Composable () -> Unit)? = null,
+    highlightDelivery: Boolean = true,
     content: @Composable () -> Unit,
 ) {
-    val futureDelivery = record.deliveryDay != null
+    val futureDelivery = highlightDelivery && record.deliveryDay != null
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(

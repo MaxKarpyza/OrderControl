@@ -141,6 +141,7 @@ private fun HistoryCard(record: CallRecord, onRestore: () -> Unit) {
     val context = LocalContext.current
     RecordCardShell(
         record = record,
+        highlightDelivery = false,
         headerAction = record.phoneNormalized?.let { phone ->
             {
                 IconButton(
