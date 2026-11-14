@@ -80,6 +80,22 @@ class SheetsClient(private val baseUrl: String = DEFAULT_BASE_URL) {
     }
 
     /**
+     * Одна вкладка по имени: `null`, если её нет или не удалось прочитать.
+     * Нужна проверке после записи: подтверждаем, что адрес реально в листе.
+     */
+    suspend fun fetchTabByName(name: String): SheetTab? {
+        val index = when (val result = fetchSheetIndex()) {
+            is IndexResult.Ok -> result.sheets
+            else -> return null
+        }
+        val gid = index[name] ?: return null
+        return when (val result = fetchTab(name, gid)) {
+            is TabResult.Ok -> result.tab
+            else -> null
+        }
+    }
+
+    /**
      * Список вкладок документа: имя → `gid`.
      *
      * `htmlview` лёгкий (десятки килобайт), но перечисляет не все вкладки —

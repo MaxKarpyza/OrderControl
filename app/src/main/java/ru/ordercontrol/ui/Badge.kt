@@ -68,9 +68,17 @@ fun BadgeRow(
     silent: Boolean,
     deliveryDay: DeliveryDay? = null,
     answered: Boolean? = null,
+    previouslyWritten: Boolean = false,
 ) {
-    if (!skipped && !silent && deliveryDay == null && answered == null) return
+    if (!skipped && !silent && deliveryDay == null && answered == null && !previouslyWritten) return
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (previouslyWritten) {
+            Badge(
+                text = stringResource(R.string.badge_written_before),
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+            )
+        }
         if (deliveryDay != null) {
             DeliveryBadge(deliveryDay)
         }

@@ -9,6 +9,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import ru.ordercontrol.AppGraph
@@ -17,12 +19,17 @@ import ru.ordercontrol.data.OpenCallItem
 import ru.ordercontrol.data.SheetCheckOutcome
 import ru.ordercontrol.data.SheetFetchResult
 import ru.ordercontrol.data.SheetTab
+import ru.ordercontrol.data.SheetWriteOutcome
+import ru.ordercontrol.data.SheetWriteProgress
 import ru.ordercontrol.domain.AmbiguousMatch
 import ru.ordercontrol.phone.CallSync
 import ru.ordercontrol.widget.WidgetRefresh
 
 /** Состояние ручной проверки необработанных записей по Google Таблице. */
 enum class SheetCheckPhase { Idle, Loading, Done, Error }
+
+/** Состояние отправки заказов в таблицу. */
+enum class SheetWritePhase { Idle, Writing, Done, Error }
 
 class UnprocessedViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -59,6 +66,22 @@ class UnprocessedViewModel(application: Application) : AndroidViewModel(applicat
 
     /** Скачанные вкладки: повторная сверка после подтверждения синонима идёт без сети. */
     private var sheetTabs: List<SheetTab> = emptyList()
+
+    var writePhase by mutableStateOf(SheetWritePhase.Idle)
+        private set
+
+    /** Прогресс записи: сколько сделано из скольких. */
+    var writeProgress by mutableStateOf<SheetWriteProgress?>(null)
+        private set
+
+    var writeOutcome by mutableStateOf<SheetWriteOutcome?>(null)
+        private set
+
+    /** Текст ошибки, когда запись не удалась целиком. */
+    var writeError by mutableStateOf<String?>(null)
+        private set
+
+    private var writeJob: Job? = null
 
     init {
         observeItems()
@@ -217,12 +240,63 @@ class UnprocessedViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     override fun onCleared() {
+        writeJob?.cancel()
+        writeJob = null
         sheetTabs = emptyList()
         super.onCleared()
     }
 
     fun consumeMessage() {
         message = null
+    }
+
+    /**
+     * Записывает заказы в таблицу: адреса → скрипт → перечитывание листа →
+     * закрытие подтверждённых. Прогресс виден оператору, действие можно
+     * остановить — тогда записанное уже подтверждённое всё равно закроется,
+     * а остальное останется в необработанных.
+     */
+    fun sendToSheet() {
+        if (writePhase == SheetWritePhase.Writing) return
+        writeJob = viewModelScope.launch {
+            val context = getApplication<Application>()
+            writePhase = SheetWritePhase.Writing
+            writeOutcome = null
+            writeError = null
+            writeProgress = SheetWriteProgress(done = 0, total = items.size, address = "")
+            try {
+                writeOutcome = AppGraph.sheetWrites.send { progress ->
+                    writeProgress = progress
+                }
+                writePhase = SheetWritePhase.Done
+            } catch (e: CancellationException) {
+                Log.i(TAG, "Запись в таблицу остановлена оператором")
+                writePhase = SheetWritePhase.Idle
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Запись в таблицу упала", e)
+                writeError = e.message
+                writePhase = SheetWritePhase.Error
+            } finally {
+                writeProgress = null
+                WidgetRefresh.updateAll(context)
+            }
+        }
+    }
+
+    /** Останавливает запись: уже закрытые записи остаются закрытыми. */
+    fun stopSheetWrite() {
+        writeJob?.cancel()
+        writeJob = null
+        writePhase = SheetWritePhase.Idle
+        writeProgress = null
+    }
+
+    fun dismissWriteResult() {
+        writePhase = SheetWritePhase.Idle
+        writeProgress = null
+        writeOutcome = null
+        writeError = null
     }
 
     private fun showOutcome(outcome: SheetCheckOutcome) {

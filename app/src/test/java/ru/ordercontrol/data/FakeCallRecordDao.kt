@@ -186,6 +186,28 @@ class FakeCallRecordDao : CallRecordDao {
         return 1
     }
 
+    override suspend fun closeWrittenBySheet(
+        id: Long,
+        at: Long,
+        reason: CloseReason,
+        sheetKey: String,
+    ): Int {
+        val index = records.indexOfFirst { it.id == id && !it.isProcessed }
+        if (index < 0) return 0
+        records[index] = records[index].copy(
+            isProcessed = true,
+            processedAt = at,
+            closeReason = reason,
+            sheetMatchKey = sheetKey,
+            sheetWrittenAt = at,
+        )
+        notifyChanged()
+        return 1
+    }
+
+    override suspend fun writtenSince(from: Long): List<CallRecord> =
+        records.filter { it.sheetWrittenAt != null && it.sheetWrittenAt >= from }
+
     private fun notifyChanged() {
         changes.value = changes.value + 1
     }

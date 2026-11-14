@@ -5,6 +5,8 @@ import ru.ordercontrol.data.CallRepository
 import ru.ordercontrol.data.ContactRepository
 import ru.ordercontrol.data.SettingsRepository
 import ru.ordercontrol.data.SheetCheckRepository
+import ru.ordercontrol.data.SheetWriteClient
+import ru.ordercontrol.data.SheetWriteRepository
 import ru.ordercontrol.data.SheetsClient
 import ru.ordercontrol.data.db.AddressAliasDao
 import ru.ordercontrol.data.db.AppDatabase
@@ -38,6 +40,14 @@ object AppGraph {
         SheetCheckRepository(
             callDao = database.callRecordDao(),
             aliasDao = addressAliases,
+            sheets = sheets,
+        )
+    }
+
+    val sheetWrites: SheetWriteRepository by lazy {
+        SheetWriteRepository(
+            callDao = database.callRecordDao(),
+            client = SheetWriteClient(),
             sheets = sheets,
         )
     }

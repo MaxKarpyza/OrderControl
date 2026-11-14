@@ -98,7 +98,9 @@ interface CallRecordDao {
     )
     suspend fun openWithAddress(): List<CallRecord>
 
-    /** Ключи строк таблицы, уже израсходованные прошлыми проверками. */
+    /**
+     * Ключи строк таблицы, уже израсходованные прошлыми проверками.
+     */
     @Query("SELECT sheetMatchKey FROM call_records WHERE sheetMatchKey IS NOT NULL")
     suspend fun usedSheetKeys(): List<String>
 
@@ -151,4 +153,24 @@ interface CallRecordDao {
             "sheetMatchKey = :sheetKey WHERE id = :id AND isProcessed = 0",
     )
     suspend fun closeBySheet(id: Long, at: Long, reason: CloseReason, sheetKey: String): Int
+
+    /**
+     * Закрывает запись после того, как приложение само записало её в таблицу:
+     * отметка о записи ставится вместе с закрытием, одним запросом.
+     *
+     * @return число обновлённых строк: 0, если запись уже закрыта параллельно.
+     */
+    @Query(
+        "UPDATE call_records SET isProcessed = 1, processedAt = :at, closeReason = :reason, " +
+            "sheetMatchKey = :sheetKey, sheetWrittenAt = :at " +
+            "WHERE id = :id AND isProcessed = 0",
+    )
+    suspend fun closeWrittenBySheet(id: Long, at: Long, reason: CloseReason, sheetKey: String): Int
+
+    /** Записи, которые приложение писало в таблицу начиная с [from]. */
+    @Query(
+        "SELECT * FROM call_records WHERE sheetWrittenAt IS NOT NULL AND sheetWrittenAt >= :from " +
+            "ORDER BY incomingAt DESC",
+    )
+    suspend fun writtenSince(from: Long): List<CallRecord>
 }

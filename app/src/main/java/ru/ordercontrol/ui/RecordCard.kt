@@ -50,6 +50,8 @@ fun RecordCardShell(
     headerTrailing: String? = null,
     headerAction: (@Composable () -> Unit)? = null,
     highlightDelivery: Boolean = true,
+    showDeliveryBadge: Boolean = true,
+    previouslyWritten: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val futureDelivery = highlightDelivery && record.deliveryDay != null
@@ -94,8 +96,9 @@ fun RecordCardShell(
             BadgeRow(
                 skipped = record.isSkipped,
                 silent = record.isSilent,
-                deliveryDay = record.deliveryDay,
+                deliveryDay = if (showDeliveryBadge) record.deliveryDay else null,
                 answered = record.isAnswered,
+                previouslyWritten = previouslyWritten,
             )
 
             InfoLine(

@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -114,6 +116,8 @@ fun OrderFormScreen(recordId: Long, onClose: () -> Unit) {
                 nameFieldVisible = viewModel.nameFieldVisible,
                 onBottlesChange = viewModel::updateBottles,
                 onAddressChange = viewModel::updateAddress,
+                onCommentChange = viewModel::updateComment,
+                onWithPhoneChange = viewModel::setWithPhoneInComment,
                 onNameChange = viewModel::updateName,
                 onSkipEnabledChange = viewModel::setSkipEnabled,
                 onSkipKindChange = viewModel::setSkipKind,
@@ -133,6 +137,8 @@ private fun FormContent(
     nameFieldVisible: Boolean,
     onBottlesChange: (String) -> Unit,
     onAddressChange: (String) -> Unit,
+    onCommentChange: (String) -> Unit,
+    onWithPhoneChange: (Boolean) -> Unit,
     onNameChange: (String) -> Unit,
     onSkipEnabledChange: (Boolean) -> Unit,
     onSkipKindChange: (BlacklistKind) -> Unit,
@@ -209,6 +215,11 @@ private fun FormContent(
                 modifier = Modifier.fillMaxWidth(),
             )
 
+            QuickBottles(
+                selected = state.bottles.trim(),
+                onSelect = onBottlesChange,
+            )
+
             DeliveryDayPicker(
                 options = DeliveryDay.optionsAt(record.incomingAt),
                 selected = state.deliveryDay,
@@ -229,6 +240,39 @@ private fun FormContent(
                 keyboardOptions = KeyboardOptions(autoCorrectEnabled = false),
                 modifier = Modifier.fillMaxWidth(),
             )
+
+            OutlinedTextField(
+                value = state.comment,
+                onValueChange = onCommentChange,
+                label = { Text(stringResource(R.string.form_comment)) },
+                placeholder = { Text(stringResource(R.string.form_comment_hint)) },
+                minLines = 1,
+                keyboardOptions = KeyboardOptions(autoCorrectEnabled = false),
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            if (record.phoneNormalized != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.form_phone_needed),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            text = stringResource(R.string.form_phone_needed_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = state.withPhoneInComment,
+                        onCheckedChange = onWithPhoneChange,
+                    )
+                }
+            }
 
             // Клиент заказывает на два адреса: сохраняем этот заказ и открываем
             // вторую карточку, чтобы адрес не потерялся.
@@ -333,10 +377,47 @@ private fun FormContent(
     }
 }
 
+/**
+ * Быстрый выбор количества: 1–5 одной кнопкой. Своё значение оператор
+ * по-прежнему вводит в поле выше.
+ */
+@Composable
+private fun QuickBottles(
+    selected: String,
+    onSelect: (String) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        for (count in 1..5) {
+            val value = count.toString()
+            val active = selected == value
+            OutlinedButton(
+                onClick = { onSelect(value) },
+                contentPadding = PaddingValues(vertical = 8.dp),
+                modifier = Modifier.weight(1f),
+                colors = if (active) {
+                    ButtonDefaults.outlinedButtonColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    )
+                } else {
+                    ButtonDefaults.outlinedButtonColors()
+                },
+            ) {
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                )
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DeliveryDayPicker(
-    options: List<DeliveryDay>,
+private fun DeliveryDayPicker(    options: List<DeliveryDay>,
     selected: DeliveryDay?,
     onSelect: (DeliveryDay?) -> Unit,
 ) {

@@ -1,5 +1,6 @@
 package ru.ordercontrol.data.db
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -47,6 +48,17 @@ data class CallRecord(
      * `null` — у старых записей состояние неизвестно.
      */
     val isAnswered: Boolean? = null,
+    /** Комментарий оператора: пишется в таблицу рядом с количеством бутылей. */
+    @ColumnInfo(defaultValue = "")
+    val comment: String = "",
+    /** Дописать телефон в комментарий при записи в таблицу. */
+    @ColumnInfo(defaultValue = "0")
+    val withPhoneInComment: Boolean = false,
+    /**
+     * Когда приложение само записало заказ в Google Таблицу и проверка это
+     * подтвердила. По этой отметке ищутся повторы, а не по тексту листа.
+     */
+    val sheetWrittenAt: Long? = null,
 ) {
     /**
      * Адрес доставки. Контакт и есть адрес: если оператор не ввёл в поле

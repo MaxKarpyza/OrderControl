@@ -25,6 +25,8 @@ data class FormUiState(
     val record: CallRecord? = null,
     val bottles: String = "",
     val address: String = "",
+    val comment: String = "",
+    val withPhoneInComment: Boolean = false,
     val nameInput: String = "",
     val knownName: String? = null,
     val skipEnabled: Boolean = false,
@@ -62,6 +64,8 @@ class FormViewModel(
             // заполненного заказа закрытие всегда спрашивало бы о потере.
             return state.bottles.trim() != record.bottlesText.trim() ||
                 state.address.trim() != record.addressText.trim() ||
+                state.comment.trim() != record.comment.trim() ||
+                state.withPhoneInComment != record.withPhoneInComment ||
                 state.nameInput.isNotBlank() ||
                 state.deliveryDay != record.deliveryDay ||
                 state.skipEnabled != initiallySkipped
@@ -97,6 +101,16 @@ class FormViewModel(
     fun updateAddress(value: String) {
         savedState[KEY_ADDRESS] = value
         state = state.copy(address = value, error = false)
+    }
+
+    fun updateComment(value: String) {
+        savedState[KEY_COMMENT] = value
+        state = state.copy(comment = value, error = false)
+    }
+
+    fun setWithPhoneInComment(enabled: Boolean) {
+        savedState[KEY_WITH_PHONE] = enabled
+        state = state.copy(withPhoneInComment = enabled)
     }
 
     fun updateName(value: String) {
@@ -180,6 +194,8 @@ class FormViewModel(
         nameInput = if (nameFieldVisible) state.nameInput else null,
         skip = resolveSkipUpdate(),
         deliveryDay = state.deliveryDay,
+        comment = state.comment,
+        withPhoneInComment = state.withPhoneInComment,
     )
 
     private fun resolveSkipUpdate(): SkipUpdate = when {
@@ -192,6 +208,8 @@ class FormViewModel(
     private fun clearDraft() {
         savedState.remove<String>(KEY_BOTTLES)
         savedState.remove<String>(KEY_ADDRESS)
+        savedState.remove<String>(KEY_COMMENT)
+        savedState.remove<Boolean>(KEY_WITH_PHONE)
         savedState.remove<String>(KEY_NAME)
         savedState.remove<Boolean>(KEY_SKIP_ENABLED)
         savedState.remove<String>(KEY_SKIP_KIND)
@@ -231,6 +249,9 @@ class FormViewModel(
                     // адрес по умолчанию, но подставлять его в поле незачем.
                     address = savedState.get<String>(KEY_ADDRESS) ?: record.addressText,
                     nameInput = savedState.get<String>(KEY_NAME) ?: "",
+                    comment = savedState.get<String>(KEY_COMMENT) ?: record.comment,
+                    withPhoneInComment = savedState.get<Boolean>(KEY_WITH_PHONE)
+                        ?: record.withPhoneInComment,
                     knownName = knownName,
                     deliveryDay = when (val savedDay = savedState.get<String>(KEY_DELIVERY_DAY)) {
                         null -> record.deliveryDay
@@ -268,6 +289,8 @@ class FormViewModel(
         private const val KEY_RECORD_ID = "record_id"
         private const val KEY_BOTTLES = "bottles"
         private const val KEY_ADDRESS = "address"
+        private const val KEY_COMMENT = "comment"
+        private const val KEY_WITH_PHONE = "with_phone"
         private const val KEY_NAME = "name"
         private const val KEY_SKIP_ENABLED = "skip_enabled"
         private const val KEY_SKIP_KIND = "skip_kind"

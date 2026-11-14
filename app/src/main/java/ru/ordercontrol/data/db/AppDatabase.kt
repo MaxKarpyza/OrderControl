@@ -10,7 +10,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [CallRecord::class, BlacklistEntry::class, AddressAlias::class],
-    version = 6,
+    version = 7,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -172,6 +172,30 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * 6 → 7: комментарий оператора и отметка о записи в Google Таблицу.
+         * Данные старых записей не переносим: количество и адрес остаются как
+         * были, комментарий у них пустой.
+         */
+        val MIGRATION_6_7: Migration = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                val columns = tableColumns(db, "call_records")
+                if ("comment" !in columns) {
+                    db.execSQL(
+                        "ALTER TABLE call_records ADD COLUMN comment TEXT NOT NULL DEFAULT ''",
+                    )
+                }
+                if ("withPhoneInComment" !in columns) {
+                    db.execSQL(
+                        "ALTER TABLE call_records ADD COLUMN withPhoneInComment INTEGER NOT NULL DEFAULT 0",
+                    )
+                }
+                if ("sheetWrittenAt" !in columns) {
+                    db.execSQL("ALTER TABLE call_records ADD COLUMN sheetWrittenAt INTEGER")
+                }
+            }
+        }
+
         private fun tableColumns(db: SupportSQLiteDatabase, table: String): Set<String> =
             db.query("PRAGMA table_info(`$table`)").use { cursor ->
                 val nameIndex = cursor.getColumnIndexOrThrow("name")
@@ -188,6 +212,7 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_3_4,
                     MIGRATION_4_5,
                     MIGRATION_5_6,
+                    MIGRATION_6_7,
                 )
                 .build()
     }

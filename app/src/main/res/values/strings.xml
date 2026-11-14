@@ -67,6 +67,7 @@
     <string name="badge_delivery_other_day">Доставка в другой день</string>
     <string name="badge_answered">принят</string>
     <string name="badge_missed">пропущен</string>
+    <string name="badge_written_before">ранее обработана</string>
     <string name="hidden_number">Скрытый номер</string>
 
     <!-- Вкладки -->
@@ -106,6 +107,24 @@
     <string name="sheet_no_network">Нет сети. Проверьте подключение.</string>
     <string name="sheet_failure">Не удалось прочитать таблицу</string>
 
+    <!-- Запись в Google Таблицу -->
+    <string name="write_button">В таблицу</string>
+    <string name="write_dialog_title">Запись в таблицу</string>
+    <string name="write_progress">Записываю %1$d из %2$d</string>
+    <string name="write_verifying">Проверяю таблицу…</string>
+    <string name="write_stop">Остановить</string>
+    <string name="write_result">Записано: %1$d. Подтверждено: %2$d.</string>
+    <string name="write_result_duplicates">Пропущено как повтор: %1$d</string>
+    <string name="write_result_skipped">Не заказы (пропущен / не клиент): %1$d</string>
+    <string name="write_result_not_confirmed">Не нашлось в таблице: %1$d</string>
+    <string name="write_result_nothing">Нет заказов для записи</string>
+    <string name="write_result_no_orders">В необработанных только пропущенные звонки и «не клиент» — записывать ненадёжно.</string>
+    <string name="write_error_no_tab">Вкладки %1$s нет. Создайте её в таблице и повторите.</string>
+    <string name="write_error_network">Нет сети — заказы остались в необработанных.</string>
+    <string name="write_error_script">Скрипт ответил ошибкой: %1$s</string>
+    <string name="write_error_read">Не удалось перечитать вкладку %1$s</string>
+    <string name="write_earlier_handled">ранее обработана</string>
+
     <!-- Настройки -->
     <string name="settings_title">Рабочее время</string>
     <string name="settings_from">С</string>
@@ -142,6 +161,10 @@
     <!-- Мини-форма -->
     <string name="form_bottles">Бутыли</string>
     <string name="form_bottles_hint">Например, 2 по 19 л</string>
+    <string name="form_comment">Комментарий</string>
+    <string name="form_comment_hint">Пожелания, время, залог</string>
+    <string name="form_phone_needed">Нужен номер</string>
+    <string name="form_phone_needed_hint">Дописать телефон в комментарий таблицы</string>
     <string name="form_address">Адрес</string>
     <string name="form_address_hint">Улица, дом, квартира</string>
     <string name="form_address_from_contact">Подставится контакт: %1$s</string>

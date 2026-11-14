@@ -8,6 +8,7 @@ import ru.ordercontrol.data.db.BlacklistDao
 import ru.ordercontrol.data.db.BlacklistEntry
 import ru.ordercontrol.data.db.CallRecord
 import ru.ordercontrol.data.db.CallRecordDao
+import ru.ordercontrol.domain.AddressNormalizer
 import ru.ordercontrol.domain.BlacklistKind
 import ru.ordercontrol.domain.BlacklistPolicy
 import ru.ordercontrol.domain.CallLogReconciler
@@ -23,6 +24,8 @@ import ru.ordercontrol.domain.SkipUpdate
 data class OpenCallItem(
     val record: CallRecord,
     val previousOrder: CallRecord?,
+    /** Тот же адрес уже записывался в таблицу вчера или сегодня. */
+    val writtenBefore: Boolean = false,
 )
 
 /** Необработанные записи в разбивке по состоянию звонка. */
@@ -42,19 +45,40 @@ class CallRepository(
     /** Необработанные записи с прошлым заказом номера, реактивно. */
     fun observeOpenItems(): Flow<List<OpenCallItem>> =
         callDao.observeOpen().map { records ->
+            val written = writtenAddressesSinceYesterday()
             records.map { record ->
                 val previous = record.phoneNormalized
                     ?.let { phone -> callDao.previousOrder(phone, record.id) }
-                OpenCallItem(record = record, previousOrder = previous)
+                OpenCallItem(
+                    record = record,
+                    previousOrder = previous,
+                    writtenBefore = AddressNormalizer.normalize(record.deliveryAddress) in written,
+                )
             }
         }
 
-    suspend fun openItems(): List<OpenCallItem> =
-        callDao.openRecords().map { record ->
+    suspend fun openItems(): List<OpenCallItem> {
+        val written = writtenAddressesSinceYesterday()
+        return callDao.openRecords().map { record ->
             val previous = record.phoneNormalized
                 ?.let { phone -> callDao.previousOrder(phone, record.id) }
-            OpenCallItem(record = record, previousOrder = previous)
+            OpenCallItem(
+                record = record,
+                previousOrder = previous,
+                writtenBefore = AddressNormalizer.normalize(record.deliveryAddress) in written,
+            )
         }
+    }
+
+    /** Адреса из записей, которые приложение писало в таблицу вчера и сегодня. */
+    private suspend fun writtenAddressesSinceYesterday(): Set<String> {
+        val zone = ZoneId.systemDefault()
+        val from = LocalDate.now(zone).minusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        return callDao.writtenSince(from)
+            .map { AddressNormalizer.normalize(it.deliveryAddress) }
+            .filter { it.isNotEmpty() }
+            .toSet()
+    }
 
     suspend fun latestOpen(): CallRecord? = callDao.latestOpen()
 
@@ -129,6 +153,9 @@ class CallRepository(
                 sheetMatchKey = null,
                 isNextDay = false,
                 deliveryDay = null,
+                comment = "",
+                withPhoneInComment = false,
+                sheetWrittenAt = null,
             ),
         )
     }
@@ -211,6 +238,8 @@ class CallRepository(
         nameInput: String?,
         skip: SkipUpdate,
         deliveryDay: DeliveryDay? = null,
+        comment: String = "",
+        withPhoneInComment: Boolean = false,
     ): Boolean {
         val record = callDao.findById(recordId) ?: return false
         val phone = record.phoneNormalized
@@ -239,6 +268,8 @@ class CallRepository(
                 isSkipped = skipped,
                 isNextDay = deliveryDay != null,
                 deliveryDay = deliveryDay,
+                comment = comment.trim(),
+                withPhoneInComment = withPhoneInComment,
             ),
         )
 

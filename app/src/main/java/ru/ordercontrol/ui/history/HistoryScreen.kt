@@ -142,6 +142,7 @@ private fun HistoryCard(record: CallRecord, onRestore: () -> Unit) {
     RecordCardShell(
         record = record,
         highlightDelivery = false,
+        showDeliveryBadge = false,
         headerAction = record.phoneNormalized?.let { phone ->
             {
                 IconButton(
