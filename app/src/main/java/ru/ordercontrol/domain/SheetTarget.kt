@@ -18,6 +18,7 @@ object SheetTarget {
         incomingAt: Long,
         deliveryDay: DeliveryDay?,
         zone: ZoneId = ZoneId.systemDefault(),
+        today: LocalDate = LocalDate.now(zone),
     ): LocalDate {
         val callDate = Instant.ofEpochMilli(incomingAt).atZone(zone).toLocalDate()
         val target = when (deliveryDay) {
@@ -30,7 +31,9 @@ object SheetTarget {
                 .with(TemporalAdjusters.nextOrSame(DayOfWeek.MONDAY))
                 .let { if (it == callDate) callDate.plusWeeks(1) else it }
 
-            DeliveryDay.OTHER_DAY, null -> callDate
+            // «Другой день» и неотмеченный заказ идут в текущую вкладку:
+            // конкретную дату оператор не называл.
+            DeliveryDay.OTHER_DAY, null -> today
         }
         // По воскресеньям доставки нет, поэтому всё, что попало на воскресенье,
         // уезжает на понедельник.

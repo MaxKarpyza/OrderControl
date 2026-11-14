@@ -6,6 +6,7 @@ import ru.ordercontrol.data.db.CallRecord
 import ru.ordercontrol.data.db.CallRecordDao
 import ru.ordercontrol.domain.AddressNormalizer
 import ru.ordercontrol.domain.CloseReason
+import ru.ordercontrol.domain.DeliveryDay
 import ru.ordercontrol.domain.SheetTarget
 
 /** Сколько сделано и что делается прямо сейчас. */
@@ -105,6 +106,7 @@ class SheetWriteRepository(
                         address = record.deliveryAddress.trim(),
                         bottles = record.bottlesText.trim(),
                         comment = commentOf(record),
+                        otherDay = record.deliveryDay == DeliveryDay.OTHER_DAY,
                     )
                 },
             )

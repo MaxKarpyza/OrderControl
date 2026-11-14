@@ -66,9 +66,15 @@ URL зашит в приложении константой: менять — т
     {
       "address": "Малахова 1-62",
       "bottles": "2",
-      "comment": "звони тел +79860020200"
+      "comment": "звони тел +79860020200",
+      "otherDay": false
     },
-    { "address": "Козыря 21-77", "bottles": "1", "comment": "" }
+    {
+      "address": "Козыря 21-77",
+      "bottles": "1",
+      "comment": "",
+      "otherDay": true
+    }
   ]
 }
 ```
@@ -76,7 +82,9 @@ URL зашит в приложении константой: менять — т
 - `tab` — имя вкладки (`дд.ММ.гг`), её выбирает приложение по дню доставки;
 - `bottles` — число, но допускается и текст (у старых записей количество
   хранится строкой);
-- `comment` — уже собранный текст, включая телефон, если оператор его добавил.
+- `comment` — уже собранный текст, включая телефон, если оператор его добавил;
+- `otherDay` — заказ на «другой день»: дата неизвестна, поэтому скрипт
+  закрашивает строку, а дата остаётся на усмотрение людей.
 
 Ответ:
 
@@ -103,6 +111,7 @@ var COL_BOTTLES = 10; // J
 var COL_COMMENT = 12; // L
 var GAP_ROWS = 5;
 var MAX_ROWS = 2000;
+var OTHER_DAY_COLOR = "#FFF2CC";
 
 function respond(payload) {
   return ContentService.createTextOutput(JSON.stringify(payload)).setMimeType(
@@ -156,6 +165,7 @@ function doPost(e) {
     var values = [];
     var comments = [];
     var written = [];
+    var otherDayRows = [];
 
     for (var i = 0; i < orders.length; i++) {
       var order = orders[i] || {};
@@ -163,9 +173,13 @@ function doPost(e) {
       if (!address) {
         continue;
       }
+      var row = firstRow + values.length;
       values.push([address, bottlesValue(order.bottles)]);
       comments.push([String(order.comment || "").trim()]);
-      written.push({ address: address, row: firstRow + values.length - 1 });
+      if (order.otherDay === true) {
+        otherDayRows.push(row);
+      }
+      written.push({ address: address, row: row });
     }
 
     if (values.length > 0) {
@@ -173,6 +187,16 @@ function doPost(e) {
       sheet
         .getRange(firstRow, COL_COMMENT, comments.length, 1)
         .setValues(comments);
+      for (var r = 0; r < otherDayRows.length; r++) {
+        sheet
+          .getRange(
+            otherDayRows[r],
+            COL_ADDRESS,
+            1,
+            COL_COMMENT - COL_ADDRESS + 1,
+          )
+          .setBackground(OTHER_DAY_COLOR);
+      }
     }
 
     return respond({ ok: true, tab: tabName, written: written });

@@ -59,6 +59,7 @@
     <string name="main_edit">Изменить</string>
     <string name="main_mark_one_processed">Обработан</string>
     <string name="main_one_processed_toast">Запись отмечена обработанной</string>
+    <string name="main_written_mark_cleared">Отметка «ранее обработана» снята</string>
     <string name="badge_skipped">не клиент</string>
     <string name="badge_silent">тихо</string>
     <string name="badge_delivery_tomorrow">Доставка завтра</string>

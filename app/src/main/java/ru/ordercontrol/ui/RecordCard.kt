@@ -52,6 +52,7 @@ fun RecordCardShell(
     highlightDelivery: Boolean = true,
     showDeliveryBadge: Boolean = true,
     previouslyWritten: Boolean = false,
+    onPreviouslyWrittenClick: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     val futureDelivery = highlightDelivery && record.deliveryDay != null
@@ -99,6 +100,7 @@ fun RecordCardShell(
                 deliveryDay = if (showDeliveryBadge) record.deliveryDay else null,
                 answered = record.isAnswered,
                 previouslyWritten = previouslyWritten,
+                onPreviouslyWrittenClick = onPreviouslyWrittenClick,
             )
 
             InfoLine(

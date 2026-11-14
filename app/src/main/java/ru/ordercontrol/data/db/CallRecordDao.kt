@@ -173,4 +173,8 @@ interface CallRecordDao {
             "ORDER BY incomingAt DESC",
     )
     suspend fun writtenSince(from: Long): List<CallRecord>
+
+    /** Снимает отметку «писала в таблицу»: адрес снова считается новым. */
+    @Query("UPDATE call_records SET sheetWrittenAt = NULL WHERE id IN (:ids)")
+    suspend fun clearSheetWritten(ids: List<Long>)
 }

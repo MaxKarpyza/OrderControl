@@ -80,6 +80,22 @@ class CallRepository(
             .toSet()
     }
 
+    /**
+     * Снимает отметку «ранее обработана» с этого адреса: оператор говорит,
+     * что это отдельный заказ, и он должен уйти в таблицу как новый.
+     */
+    suspend fun clearWrittenMark(recordId: Long) {
+        val record = callDao.findById(recordId) ?: return
+        val address = AddressNormalizer.normalize(record.deliveryAddress)
+        if (address.isEmpty()) return
+        val zone = ZoneId.systemDefault()
+        val from = LocalDate.now(zone).minusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        val ids = callDao.writtenSince(from)
+            .filter { AddressNormalizer.normalize(it.deliveryAddress) == address }
+            .map { it.id }
+        if (ids.isNotEmpty()) callDao.clearSheetWritten(ids)
+    }
+
     suspend fun latestOpen(): CallRecord? = callDao.latestOpen()
 
     /** Обработанные оператором записи, новые сверху: вкладка истории. */

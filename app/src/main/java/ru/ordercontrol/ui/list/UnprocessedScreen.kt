@@ -237,6 +237,7 @@ private fun UnprocessedTab(viewModel: UnprocessedViewModel) {
                             )
                         },
                         onProcessed = { pendingProcessId = item.record.id },
+                        onClearWritten = { viewModel.clearWrittenBefore(item.record.id) },
                     )
                 }
             }
@@ -678,6 +679,7 @@ private fun RecordCard(
     item: OpenCallItem,
     onEdit: () -> Unit,
     onProcessed: () -> Unit,
+    onClearWritten: () -> Unit,
 ) {
     val context = LocalContext.current
     val phone = item.record.phoneNormalized
@@ -685,6 +687,7 @@ private fun RecordCard(
     RecordCardShell(
         record = item.record,
         previouslyWritten = item.writtenBefore,
+        onPreviouslyWrittenClick = if (item.writtenBefore) onClearWritten else null,
         headerTrailing = DisplayFormat.callTime(item.record.incomingAt),
         headerAction = phone?.let { number ->
             {

@@ -11,21 +11,30 @@ class SheetTargetTest {
 
     private val zone: ZoneId = ZoneId.of("Europe/Kyiv")
 
+    /** «Сегодня» для теста — пятница 20.11.2026. */
+    private val today: LocalDate = LocalDate.of(2026, 11, 20)
+
     private fun at(year: Int, month: Int, day: Int, hour: Int = 10): Long =
         LocalDate.of(year, month, day).atTime(hour, 0).atZone(zone).toInstant().toEpochMilli()
 
-    private fun date(day: DeliveryDay?, atMillis: Long): LocalDate =
-        SheetTarget.date(incomingAt = atMillis, deliveryDay = day, zone = zone)
+    private fun date(day: DeliveryDay?, atMillis: Long, today: LocalDate = this.today): LocalDate =
+        SheetTarget.date(
+            incomingAt = atMillis,
+            deliveryDay = day,
+            zone = zone,
+            today = today,
+        )
 
     @Test
-    fun `без дня доставки — день звонка`() {
-        val call = at(2026, 11, 14)
-        assertEquals(LocalDate.of(2026, 11, 14), date(null, call))
-        assertEquals(LocalDate.of(2026, 11, 14), date(DeliveryDay.OTHER_DAY, call))
+    fun `без дня доставки — текущая вкладка`() {
+        // Звонок был неделю назад, но дату доставки не отмечали — пишем в текущую.
+        val oldCall = at(2026, 11, 14)
+        assertEquals(today, date(null, oldCall))
+        assertEquals(today, date(DeliveryDay.OTHER_DAY, oldCall))
     }
 
     @Test
-    fun `завтра и послезавтра`() {
+    fun `завтра и послезавтра считаются от дня звонка`() {
         // 12.11.2026 — четверг.
         val call = at(2026, 11, 12)
         assertEquals(LocalDate.of(2026, 11, 13), date(DeliveryDay.TOMORROW, call))
@@ -44,11 +53,16 @@ class SheetTargetTest {
 
     @Test
     fun `воскресенье переносится на понедельник`() {
-        // 15.11.2026 — воскресенье, доставки нет.
-        assertEquals(LocalDate.of(2026, 11, 16), date(null, at(2026, 11, 15)))
-        assertEquals(LocalDate.of(2026, 11, 16), date(DeliveryDay.OTHER_DAY, at(2026, 11, 15)))
+        val sunday = LocalDate.of(2026, 11, 15)
+        assertEquals(
+            LocalDate.of(2026, 11, 16),
+            date(null, at(2026, 11, 15), today = sunday),
+        )
         // Суббота с пометкой «завтра» тоже даёт воскресенье → понедельник.
-        assertEquals(LocalDate.of(2026, 11, 16), date(DeliveryDay.TOMORROW, at(2026, 11, 14)))
+        assertEquals(
+            LocalDate.of(2026, 11, 16),
+            date(DeliveryDay.TOMORROW, at(2026, 11, 14)),
+        )
     }
 
     @Test

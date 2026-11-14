@@ -1,5 +1,6 @@
 package ru.ordercontrol.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
@@ -69,12 +70,18 @@ fun BadgeRow(
     deliveryDay: DeliveryDay? = null,
     answered: Boolean? = null,
     previouslyWritten: Boolean = false,
+    onPreviouslyWrittenClick: (() -> Unit)? = null,
 ) {
     if (!skipped && !silent && deliveryDay == null && answered == null && !previouslyWritten) return
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         if (previouslyWritten) {
             Badge(
                 text = stringResource(R.string.badge_written_before),
+                modifier = if (onPreviouslyWrittenClick != null) {
+                    Modifier.clickable(onClick = onPreviouslyWrittenClick)
+                } else {
+                    Modifier
+                },
                 containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                 contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
             )

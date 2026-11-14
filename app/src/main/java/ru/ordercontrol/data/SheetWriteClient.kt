@@ -13,6 +13,8 @@ data class SheetWriteOrder(
     val address: String,
     val bottles: String,
     val comment: String,
+    /** Заказ на «другой день»: строку помечаем цветом, дата неизвестна. */
+    val otherDay: Boolean = false,
 )
 
 /** Ответ скрипта на успешную запись. */
@@ -54,7 +56,8 @@ class SheetWriteClient(private val endpointUrl: String = DEFAULT_ENDPOINT) {
                                 JSONObject()
                                     .put("address", order.address)
                                     .put("bottles", order.bottles)
-                                    .put("comment", order.comment),
+                                    .put("comment", order.comment)
+                                    .put("otherDay", order.otherDay),
                             )
                         }
                     },

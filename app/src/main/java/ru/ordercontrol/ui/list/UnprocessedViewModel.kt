@@ -138,13 +138,25 @@ class UnprocessedViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     /** Отмечает обработанной одну запись из списка. */
-    fun markProcessed(recordId: Long) {
-        viewModelScope.launch {
+    fun markProcessed(recordId: Long) {        viewModelScope.launch {
             val context = getApplication<Application>()
             try {
                 AppGraph.calls.markProcessed(recordId)
                 WidgetRefresh.updateAll(context)
                 message = context.getString(R.string.main_one_processed_toast)
+            } catch (_: Exception) {
+                message = context.getString(R.string.main_error)
+            }
+        }
+    }
+
+    /** Снимает отметку «ранее обработана»: адрес снова пойдёт в таблицу. */
+    fun clearWrittenBefore(recordId: Long) {
+        viewModelScope.launch {
+            val context = getApplication<Application>()
+            try {
+                AppGraph.calls.clearWrittenMark(recordId)
+                message = context.getString(R.string.main_written_mark_cleared)
             } catch (_: Exception) {
                 message = context.getString(R.string.main_error)
             }

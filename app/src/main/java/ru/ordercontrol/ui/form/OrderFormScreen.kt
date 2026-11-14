@@ -203,6 +203,11 @@ private fun FormContent(
 
             HorizontalDivider()
 
+            QuickBottles(
+                selected = state.bottles.trim(),
+                onSelect = onBottlesChange,
+            )
+
             OutlinedTextField(
                 value = state.bottles,
                 onValueChange = onBottlesChange,
@@ -213,11 +218,6 @@ private fun FormContent(
                 // не меняется после привязки и не дёргает форму.
                 keyboardOptions = KeyboardOptions(autoCorrectEnabled = false),
                 modifier = Modifier.fillMaxWidth(),
-            )
-
-            QuickBottles(
-                selected = state.bottles.trim(),
-                onSelect = onBottlesChange,
             )
 
             DeliveryDayPicker(

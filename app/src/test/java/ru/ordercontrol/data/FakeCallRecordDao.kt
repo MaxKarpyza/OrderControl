@@ -208,6 +208,12 @@ class FakeCallRecordDao : CallRecordDao {
     override suspend fun writtenSince(from: Long): List<CallRecord> =
         records.filter { it.sheetWrittenAt != null && it.sheetWrittenAt >= from }
 
+    override suspend fun clearSheetWritten(ids: List<Long>) {
+        val target = ids.toSet()
+        records.replaceAll { if (it.id in target) it.copy(sheetWrittenAt = null) else it }
+        notifyChanged()
+    }
+
     private fun notifyChanged() {
         changes.value = changes.value + 1
     }
