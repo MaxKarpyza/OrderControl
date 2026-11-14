@@ -26,9 +26,10 @@ class SheetTargetTest {
 
     @Test
     fun `завтра и послезавтра`() {
-        val call = at(2026, 11, 14)
-        assertEquals(LocalDate.of(2026, 11, 15), date(DeliveryDay.TOMORROW, call))
-        assertEquals(LocalDate.of(2026, 11, 16), date(DeliveryDay.DAY_AFTER_TOMORROW, call))
+        // 12.11.2026 — четверг.
+        val call = at(2026, 11, 12)
+        assertEquals(LocalDate.of(2026, 11, 13), date(DeliveryDay.TOMORROW, call))
+        assertEquals(LocalDate.of(2026, 11, 14), date(DeliveryDay.DAY_AFTER_TOMORROW, call))
     }
 
     @Test
@@ -39,6 +40,15 @@ class SheetTargetTest {
         assertEquals(LocalDate.of(2026, 11, 16), date(DeliveryDay.MONDAY, at(2026, 11, 13)))
         // Сам понедельник 16.11 → следующий, 23.11.
         assertEquals(LocalDate.of(2026, 11, 23), date(DeliveryDay.MONDAY, at(2026, 11, 16)))
+    }
+
+    @Test
+    fun `воскресенье переносится на понедельник`() {
+        // 15.11.2026 — воскресенье, доставки нет.
+        assertEquals(LocalDate.of(2026, 11, 16), date(null, at(2026, 11, 15)))
+        assertEquals(LocalDate.of(2026, 11, 16), date(DeliveryDay.OTHER_DAY, at(2026, 11, 15)))
+        // Суббота с пометкой «завтра» тоже даёт воскресенье → понедельник.
+        assertEquals(LocalDate.of(2026, 11, 16), date(DeliveryDay.TOMORROW, at(2026, 11, 14)))
     }
 
     @Test

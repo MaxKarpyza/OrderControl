@@ -20,7 +20,7 @@ object SheetTarget {
         zone: ZoneId = ZoneId.systemDefault(),
     ): LocalDate {
         val callDate = Instant.ofEpochMilli(incomingAt).atZone(zone).toLocalDate()
-        return when (deliveryDay) {
+        val target = when (deliveryDay) {
             DeliveryDay.TOMORROW -> callDate.plusDays(1)
             DeliveryDay.DAY_AFTER_TOMORROW -> callDate.plusDays(2)
 
@@ -32,5 +32,8 @@ object SheetTarget {
 
             DeliveryDay.OTHER_DAY, null -> callDate
         }
+        // По воскресеньям доставки нет, поэтому всё, что попало на воскресенье,
+        // уезжает на понедельник.
+        return if (target.dayOfWeek == DayOfWeek.SUNDAY) target.plusDays(1) else target
     }
 }

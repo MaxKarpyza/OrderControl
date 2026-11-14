@@ -3,6 +3,8 @@ package ru.ordercontrol.ui
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -23,15 +25,23 @@ fun RootScreen() {
         onboardingDone = AppGraph.settings.isOnboardingDone()
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        Box(modifier = Modifier.weight(1f)) {
-            when (onboardingDone) {
-                null -> Box(modifier = Modifier.fillMaxSize())
-                false -> OnboardingScreen(onDone = { onboardingDone = true })
-                true -> UnprocessedScreen()
+    // Surface задаёт цвет текста по умолчанию. Без него экраны, нарисованные
+    // вне Scaffold (настройки, онбординг), в тёмной теме получали чёрный
+    // текст на тёмном фоне.
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background,
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Box(modifier = Modifier.weight(1f)) {
+                when (onboardingDone) {
+                    null -> Box(modifier = Modifier.fillMaxSize())
+                    false -> OnboardingScreen(onDone = { onboardingDone = true })
+                    true -> UnprocessedScreen()
+                }
             }
-        }
 
-        UpdateBanner()
+            UpdateBanner()
+        }
     }
 }
