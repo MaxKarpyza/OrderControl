@@ -149,6 +149,8 @@
     <string name="update_action">Обновить</string>
     <string name="update_downloading">Загрузка… %1$d%%</string>
     <string name="update_download_failed">Не удалось скачать обновление</string>
+    <string name="update_retrying">Связь прервалась, повтор %1$d…</string>
+    <string name="update_resume">Докачиваем с %1$d%%…</string>
     <string name="update_install_failed">Не удалось запустить установку</string>
     <string name="update_allow_install">Разрешите установку приложений из этого источника, затем нажмите «Скачать и установить» ещё раз.</string>
     <string name="update_allow_install_action">Открыть настройки</string>

@@ -90,10 +90,19 @@ fun UpdateBanner(modifier: Modifier = Modifier) {
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 when {
-                    install.downloading -> LinearProgressIndicator(
-                        progress = { install.percent / 100f },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    install.downloading -> {
+                        LinearProgressIndicator(
+                            progress = { install.percent / 100f },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        install.status?.let { status ->
+                            Text(
+                                text = status,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                     install.error != null -> Text(
                         text = install.error.orEmpty(),
                         style = MaterialTheme.typography.bodySmall,
@@ -223,6 +232,13 @@ fun UpdateSection() {
                 progress = { install.percent / 100f },
                 modifier = Modifier.fillMaxWidth(),
             )
+            install.status?.let { status ->
+                Text(
+                    text = status,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
         install.error?.let {
             Text(
@@ -248,6 +264,10 @@ private class UpdateInstallState(
 
     var error by mutableStateOf<String?>(null)
 
+    /** Сообщение о ходе загрузки: повтор запроса или докачка. */
+    var status by mutableStateOf<String?>(null)
+        private set
+
     var canInstall by mutableStateOf(ApkInstaller.canInstall(context))
         private set
 
@@ -266,12 +286,19 @@ private class UpdateInstallState(
         scope.launch {
             downloading = true
             percent = 0
+            status = null
             val apk = try {
-                AppGraph.updates.download(info) { percent = it }
+                AppGraph.updates.download(
+                    info,
+                    onProgress = { percent = it },
+                    onStatus = { status = it },
+                )
             } catch (e: Exception) {
                 error = context.getString(R.string.update_download_failed)
                 downloading = false
                 return@launch
+            } finally {
+                status = null
             }
             try {
                 ApkInstaller.install(context, apk)

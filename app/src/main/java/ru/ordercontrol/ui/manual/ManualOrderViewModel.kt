@@ -64,10 +64,17 @@ class ManualOrderViewModel(application: Application) : AndroidViewModel(applicat
     fun updateAddress(value: String) {
         state = state.copy(address = value, error = false)
         lookupJob?.cancel()
+        if (value.isBlank()) {
+            state = state.copy(suggestions = emptyList())
+            return
+        }
         lookupJob = viewModelScope.launch {
             // Ждём, пока оператор допечатает: иначе ищем по каждой букве.
             delay(LOOKUP_DELAY_MS)
             val suggestions = AppGraph.addressBase.search(value)
+            // Пока искали, текст мог измениться: показываем подсказки только
+            // для того, что реально напечатано.
+            if (state.address != value) return@launch
             state = state.copy(suggestions = suggestions)
             applyBase(AppGraph.addressBase.find(value))
         }
@@ -75,6 +82,9 @@ class ManualOrderViewModel(application: Application) : AndroidViewModel(applicat
 
     /** Оператор выбрал адрес из подсказок. */
     fun selectSuggestion(entry: AddressBaseEntry) {
+        // Отменяем поиск: иначе он вернёт подсказки по старому запросу и
+        // список снова вылезет поверх ввода.
+        lookupJob?.cancel()
         state = state.copy(address = entry.address, suggestions = emptyList())
         applyBase(entry)
     }

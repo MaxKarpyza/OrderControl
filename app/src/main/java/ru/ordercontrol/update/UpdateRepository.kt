@@ -24,6 +24,9 @@ class UpdateRepository(
         return result
     }
 
-    suspend fun download(info: UpdateInfo, onProgress: (Int) -> Unit): File =
-        client.download(info, onProgress)
+    suspend fun download(
+        info: UpdateInfo,
+        onProgress: (Int) -> Unit,
+        onStatus: (String) -> Unit = {},
+    ): File = client.download(info, onProgress, onStatus)
 }
