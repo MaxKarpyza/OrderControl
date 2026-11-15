@@ -13,6 +13,8 @@ data class SheetWriteOrder(
     val address: String,
     val bottles: String,
     val comment: String,
+    /** Район доставки: пишется в колонку `M` блока заказов. */
+    val district: String = "",
     /** Заказ на «другой день»: строку помечаем цветом, дата неизвестна. */
     val otherDay: Boolean = false,
 )
@@ -46,23 +48,7 @@ class SheetWriteClient(private val endpointUrl: String = DEFAULT_ENDPOINT) {
         withContext(Dispatchers.IO) {
             if (orders.isEmpty()) return@withContext SheetWriteResult.Success(tab, emptyList())
 
-            val body = JSONObject()
-                .put("tab", tab)
-                .put(
-                    "orders",
-                    JSONArray().apply {
-                        orders.forEach { order ->
-                            put(
-                                JSONObject()
-                                    .put("address", order.address)
-                                    .put("bottles", order.bottles)
-                                    .put("comment", order.comment)
-                                    .put("otherDay", order.otherDay),
-                            )
-                        }
-                    },
-                )
-                .toString()
+            val body = buildWriteBody(tab, orders)
 
             val response = try {
                 post(body)
@@ -143,3 +129,37 @@ class SheetWriteClient(private val endpointUrl: String = DEFAULT_ENDPOINT) {
         private const val USER_AGENT = "OrderControl/1.0 (Android)"
     }
 }
+
+/**
+ * Тело POST-запроса: вкладка и список заказов.
+ *
+ * Отдельно от клиента, чтобы состав запроса можно было проверить без сети.
+ */
+internal fun buildWriteBody(tab: String, orders: List<SheetWriteOrder>): String =
+    JSONObject()
+        .put("tab", tab)
+        .put(
+            "orders",
+            JSONArray().apply {
+                orders.forEach { order ->
+                    val json = JSONObject()
+                    orderFields(order).forEach { (key, value) -> json.put(key, value) }
+                    put(json)
+                }
+            },
+        )
+        .toString()
+
+/**
+ * Поля заказа, которые уходят скрипту.
+ *
+ * Отдельно от JSON: в JVM-тестах `org.json` — заглушка Android, которая
+ * ничего не делает, поэтому состав запроса проверяется по этой карте.
+ */
+internal fun orderFields(order: SheetWriteOrder): Map<String, Any> = linkedMapOf(
+    "address" to order.address,
+    "bottles" to order.bottles,
+    "comment" to order.comment,
+    "district" to order.district,
+    "otherDay" to order.otherDay,
+)

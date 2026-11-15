@@ -50,6 +50,7 @@ object AppGraph {
             callDao = database.callRecordDao(),
             client = SheetWriteClient(),
             sheets = sheets,
+            addressBase = addressBase,
         )
     }
 

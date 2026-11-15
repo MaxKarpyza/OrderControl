@@ -43,6 +43,24 @@ internal fun buildSheetComment(record: CallRecord): String {
 }
 
 /**
+ * Район для ячейки таблицы.
+ *
+ * Сначала район из самой записи: у ручных заказов его подставляет база
+ * адресов или вводит оператор. У заказов по звонку района в записи нет —
+ * тогда он ищется по адресу в базе адресов, а если и там нет, ячейка
+ * остаётся пустой.
+ *
+ * @param lookup поиск района по адресу.
+ */
+internal suspend fun resolveDistrict(
+    record: CallRecord,
+    lookup: suspend (String) -> String?,
+): String {
+    record.district?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+    return lookup(record.deliveryAddress)?.trim()?.takeIf { it.isNotEmpty() }.orEmpty()
+}
+
+/**
  * Запись необработанных заказов в Google Таблицу.
  *
  * Порядок: отбираем заказы → отбрасываем те, которые приложение уже писало
@@ -53,6 +71,7 @@ class SheetWriteRepository(
     private val callDao: CallRecordDao,
     private val client: SheetWriteClient,
     private val sheets: SheetsClient,
+    private val addressBase: AddressBaseRepository,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
 
@@ -106,6 +125,7 @@ class SheetWriteRepository(
                         address = record.deliveryAddress.trim(),
                         bottles = record.bottlesText.trim(),
                         comment = commentOf(record),
+                        district = districtOf(record),
                         otherDay = record.deliveryDay == DeliveryDay.OTHER_DAY,
                     )
                 },
@@ -192,6 +212,10 @@ class SheetWriteRepository(
     }
 
     private fun commentOf(record: CallRecord): String = buildSheetComment(record)
+
+    /** Район заказа: из записи, а если его нет — из базы адресов. */
+    private suspend fun districtOf(record: CallRecord): String =
+        resolveDistrict(record) { address -> addressBase.find(address)?.district }
 
     private class MutableOutcome(
         val total: Int,

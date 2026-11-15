@@ -19,8 +19,8 @@ URL зашит в приложении константой: менять — т
 ## Что делает скрипт
 
 Пишет заказы в **центральный блок** вкладки: адрес в колонку `I`, количество
-бутылей в `J`, комментарий в `L`. Колонку `K` (цена, формула) и район `M` не
-трогает — их заполняют люди.
+бутылей в `J`, комментарий в `L`, район в `M`. Колонку `K` (цена, формула) не
+трогает — её считает формула.
 
 Строки добавляются после последней заполненной строки блока с отступом в
 5 пустых строк. Внутри одной пачки строки идут подряд.
@@ -55,6 +55,10 @@ URL зашит в приложении константой: менять — т
 **Развернуть → Управление развёртываниями → карандаш → Версия: Новая версия →
 Развернуть**. URL остаётся прежним.
 
+Так обновлялся скрипт 15.11.2026: добавлена запись района в колонку `M`.
+До этого обновления приложение отправляет поле `district`, но старый скрипт
+его не понимает и район в таблицу не попадает.
+
 ## Что принимает скрипт
 
 `POST` с JSON:
@@ -67,12 +71,14 @@ URL зашит в приложении константой: менять — т
       "address": "Малахова 1-62",
       "bottles": "2",
       "comment": "звони тел +79860020200",
+      "district": "Начальный центр",
       "otherDay": false
     },
     {
       "address": "Козыря 21-77",
       "bottles": "1",
       "comment": "",
+      "district": "",
       "otherDay": true
     }
   ]
@@ -83,6 +89,9 @@ URL зашит в приложении константой: менять — т
 - `bottles` — число, но допускается и текст (у старых записей количество
   хранится строкой);
 - `comment` — уже собранный текст, включая телефон, если оператор его добавил;
+- `district` — район доставки в колонку `M`. Приложение берёт район из заказа,
+  а если там его нет (заказ по звонку) — из базы адресов. Пустая строка —
+  ячейка остаётся пустой;
 - `otherDay` — заказ на «другой день»: дата неизвестна, поэтому скрипт
   закрашивает строку, а дата остаётся на усмотрение людей.
 
@@ -109,6 +118,7 @@ var SPREADSHEET_ID = "1HDK5_dbN52XIE3XScBhVJtvtJvgbEMwH8U6Trozjmqg";
 var COL_ADDRESS = 9; // I
 var COL_BOTTLES = 10; // J
 var COL_COMMENT = 12; // L
+var COL_DISTRICT = 13; // M
 var GAP_ROWS = 5;
 var MAX_ROWS = 2000;
 var OTHER_DAY_COLOR = "#FFF2CC";
@@ -164,6 +174,7 @@ function doPost(e) {
 
     var values = [];
     var comments = [];
+    var districts = [];
     var written = [];
     var otherDayRows = [];
 
@@ -176,6 +187,7 @@ function doPost(e) {
       var row = firstRow + values.length;
       values.push([address, bottlesValue(order.bottles)]);
       comments.push([String(order.comment || "").trim()]);
+      districts.push([String(order.district || "").trim()]);
       if (order.otherDay === true) {
         otherDayRows.push(row);
       }
@@ -187,13 +199,16 @@ function doPost(e) {
       sheet
         .getRange(firstRow, COL_COMMENT, comments.length, 1)
         .setValues(comments);
+      sheet
+        .getRange(firstRow, COL_DISTRICT, districts.length, 1)
+        .setValues(districts);
       for (var r = 0; r < otherDayRows.length; r++) {
         sheet
           .getRange(
             otherDayRows[r],
             COL_ADDRESS,
             1,
-            COL_COMMENT - COL_ADDRESS + 1,
+            COL_DISTRICT - COL_ADDRESS + 1,
           )
           .setBackground(OTHER_DAY_COLOR);
       }
