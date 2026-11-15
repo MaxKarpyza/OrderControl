@@ -177,6 +177,39 @@ class CallRepository(
     }
 
     /**
+     * Создаёт заказ, введённый оператором вручную.
+     *
+     * Записи такого рода не было в журнале звонков: номер не известен,
+     * а время — это момент ввода, а не звонка.
+     *
+     * @return id созданной записи.
+     */
+    suspend fun createManualOrder(
+        address: String,
+        bottles: String,
+        comment: String,
+        district: String?,
+        deliveryDay: DeliveryDay?,
+        at: Long = System.currentTimeMillis(),
+    ): Long {
+        return callDao.insert(
+            CallRecord(
+                phoneNormalized = null,
+                displayName = null,
+                callLogId = null,
+                incomingAt = at,
+                bottlesText = bottles.trim(),
+                addressText = address.trim(),
+                isAnswered = true,
+                isManual = true,
+                district = district?.trim()?.takeIf { it.isNotEmpty() },
+                deliveryDay = deliveryDay,
+                comment = comment.trim(),
+            ),
+        )
+    }
+
+    /**
      * Регистрирует входящий звонок по правилам MVP.
      * @return id созданной или обновлённой записи, либо null, если запись
      *         создавать не нужно (пропущенный вне рабочего времени или номер

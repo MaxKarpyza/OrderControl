@@ -24,6 +24,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
@@ -74,6 +75,8 @@ import ru.ordercontrol.domain.AmbiguousMatch
 import ru.ordercontrol.ui.DisplayFormat
 import ru.ordercontrol.ui.RecordCardShell
 import ru.ordercontrol.ui.history.HistoryScreen
+import ru.ordercontrol.ui.manual.ManualOrderDialog
+import ru.ordercontrol.ui.manual.ManualOrderViewModel
 import ru.ordercontrol.ui.settings.SettingsScreen
 
 private const val TAB_UNPROCESSED = 0
@@ -86,8 +89,10 @@ private const val MAX_LISTED_ISSUES = 5
 @Composable
 fun UnprocessedScreen() {
     val viewModel: UnprocessedViewModel = viewModel()
+    val manualViewModel: ManualOrderViewModel = viewModel()
     val lifecycleOwner = LocalLifecycleOwner.current
     var showSettings by rememberSaveable { mutableStateOf(false) }
+    var showManualOrder by rememberSaveable { mutableStateOf(false) }
     val pagerState = rememberPagerState(pageCount = { TAB_COUNT })
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -118,6 +123,17 @@ fun UnprocessedScreen() {
             },
         )
         return
+    }
+
+    if (showManualOrder) {
+        ManualOrderDialog(
+            viewModel = manualViewModel,
+            onDismiss = { showManualOrder = false },
+            onSaved = {
+                showManualOrder = false
+                viewModel.notifyManualAdded()
+            },
+        )
     }
 
     // safeDrawing включает IME: вкладки и кнопки остаются над клавиатурой,
@@ -156,6 +172,18 @@ fun UnprocessedScreen() {
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                }
+                IconButton(
+                    onClick = {
+                        // Карточка живёт дольше одного открытия — чистим её.
+                        manualViewModel.reset()
+                        showManualOrder = true
+                    },
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = stringResource(R.string.manual_add),
+                    )
                 }
                 IconButton(onClick = { showSettings = true }) {
                     Icon(

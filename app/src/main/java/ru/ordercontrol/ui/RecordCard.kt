@@ -24,7 +24,11 @@ import ru.ordercontrol.data.db.CallRecord
 fun CallRecord.cardTitle(): String =
     displayName?.takeIf { it.isNotBlank() }
         ?: phoneNormalized?.let { DisplayFormat.phone(it) }
-        ?: stringResource(R.string.hidden_number)
+        ?: if (isManual) {
+            stringResource(R.string.manual_record_title)
+        } else {
+            stringResource(R.string.hidden_number)
+        }
 
 /** Строка «подпись — значение» в карточке. */
 @Composable
@@ -118,6 +122,12 @@ fun RecordCardShell(
                     stringResource(R.string.main_not_filled)
                 },
             )
+            record.district?.takeIf { it.isNotBlank() }?.let { district ->
+                InfoLine(
+                    label = stringResource(R.string.main_district),
+                    value = district,
+                )
+            }
 
             content()
         }

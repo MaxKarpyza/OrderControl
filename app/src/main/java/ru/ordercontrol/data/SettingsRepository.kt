@@ -34,6 +34,8 @@ class SettingsRepository(private val context: Context) : ScheduleProvider {
         val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
         val UPDATE_LAST_CHECK = longPreferencesKey("update_last_check")
         val UPDATE_DISMISSED_CODE = intPreferencesKey("update_dismissed_code")
+        val ADDRESS_BASE_LAST_REFRESH = longPreferencesKey("address_base_last_refresh")
+        val ADDRESS_BASE_DISTRICTS = stringSetPreferencesKey("address_base_districts")
     }
 
     val schedule: Flow<WorkSchedule> = context.settingsDataStore.data.map { it.toSchedule() }
@@ -95,6 +97,26 @@ class SettingsRepository(private val context: Context) : ScheduleProvider {
         }
     }
 
+    /** Когда базу адресов обновляли в последний раз. */
+    suspend fun addressBaseLastRefresh(): Long =
+        context.settingsDataStore.data.first()[Keys.ADDRESS_BASE_LAST_REFRESH] ?: 0L
+
+    suspend fun markAddressBaseRefreshed(at: Long = System.currentTimeMillis()) {
+        context.settingsDataStore.edit { it[Keys.ADDRESS_BASE_LAST_REFRESH] = at }
+    }
+
+    /** Пора ли обновлять базу адресов: не чаще раза в сутки. */
+    suspend fun isAddressBaseRefreshDue(now: Long = System.currentTimeMillis()): Boolean =
+        now - addressBaseLastRefresh() >= ADDRESS_BASE_REFRESH_INTERVAL_MS
+
+    /** Районы, которые приложение уже научилось отличать от комментариев. */
+    suspend fun addressBaseDistricts(): Set<String> =
+        context.settingsDataStore.data.first()[Keys.ADDRESS_BASE_DISTRICTS].orEmpty()
+
+    suspend fun setAddressBaseDistricts(districts: Set<String>) {
+        context.settingsDataStore.edit { it[Keys.ADDRESS_BASE_DISTRICTS] = districts }
+    }
+
     private fun Preferences.toSchedule(): WorkSchedule {
         val start = this[Keys.START_MINUTE] ?: WorkSchedule.DEFAULT_START_MINUTE
         val end = this[Keys.END_MINUTE] ?: WorkSchedule.DEFAULT_END_MINUTE
@@ -115,5 +137,8 @@ class SettingsRepository(private val context: Context) : ScheduleProvider {
     companion object {
         /** Автопроверка обновлений — не чаще двух раз в сутки. */
         private const val UPDATE_CHECK_INTERVAL_MS = 12 * 60 * 60 * 1000L
+
+        /** Обновление базы адресов — не чаще раза в сутки. */
+        private const val ADDRESS_BASE_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000L
     }
 }

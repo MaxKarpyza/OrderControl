@@ -3,6 +3,7 @@ package ru.ordercontrol.data
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -96,6 +97,34 @@ class SheetsClient(private val baseUrl: String = DEFAULT_BASE_URL) {
     }
 
     /**
+     * Все вкладки документа: имена вкладок.
+     *
+     * Имена берутся со страницы редактирования: в лёгкой `htmlview`
+     * перечислены только последние вкладки, а базе адресов нужна вся
+     * история. Страница весит около мегабайта, но скачивается один раз.
+     */
+    suspend fun fetchAllTabNames(): List<String> = withContext(Dispatchers.IO) {
+        val html = download(editUrl()) ?: return@withContext emptyList()
+        parseTabNames(html)
+    }
+
+    /**
+     * CSV вкладки по её имени.
+     *
+     * Имя передаётся прямо в `gviz`: вкладка с таким именем существует —
+     * список имён взят из того же документа, — а несуществующее имя сервер
+     * отклоняет ошибкой, а не отдаёт чужой лист.
+     */
+    suspend fun fetchTabCsv(name: String): List<List<String>>? = withContext(Dispatchers.IO) {
+        val text = try {
+            download(csvUrlByName(name))
+        } catch (_: IOException) {
+            return@withContext null
+        } ?: return@withContext null
+        SheetCsv.parse(text)
+    }
+
+    /**
      * Список вкладок документа: имя → `gid`.
      *
      * `htmlview` лёгкий (десятки килобайт), но перечисляет не все вкладки —
@@ -186,6 +215,10 @@ class SheetsClient(private val baseUrl: String = DEFAULT_BASE_URL) {
         private val SHEET_ENTRY: Regex =
             Regex("""name:\s*"([^"]+)"[^}]*?gid:\s*"(\d+)"""")
 
+        /** Подпись вкладки на странице редактирования: `03.11.26`. */
+        private val TAB_CAPTION: Regex =
+            Regex("""docs-sheet-tab-caption">([^<]+)<""")
+
         /**
          * На странице редактирования вкладки лежат как
          * `[311,0,"178090042",[{"1":[[0,0,"27.10.26"]…`, с экранированием
@@ -206,6 +239,22 @@ class SheetsClient(private val baseUrl: String = DEFAULT_BASE_URL) {
         /** URL CSV-экспорта вкладки по её `gid`. */
         internal fun csvUrl(gid: String, baseUrl: String = DEFAULT_BASE_URL): String =
             "$baseUrl/gviz/tq?tqx=out:csv&gid=$gid"
+
+        /** URL CSV-экспорта вкладки по её имени. */
+        internal fun csvUrlByName(name: String, baseUrl: String = DEFAULT_BASE_URL): String =
+            "$baseUrl/gviz/tq?tqx=out:csv&sheet=${encodeQuery(name)}"
+
+        /** Имена вкладок со страницы редактирования: `03.11.26`. */
+        internal fun parseTabNames(html: String): List<String> =
+            TAB_CAPTION.findAll(html)
+                .map { it.groupValues[1].trim() }
+                .filter { it.isNotEmpty() }
+                .distinct()
+                .toList()
+
+        /** Имя вкладки в адресе запроса: пробелы и спецсимволы экранируются. */
+        private fun encodeQuery(value: String): String =
+            URLEncoder.encode(value, "UTF-8").replace("+", "%20")
 
         /** Пары «имя вкладки → gid» из HTML списка вкладок. */
         internal fun parseSheetIndex(html: String): Map<String, String> =

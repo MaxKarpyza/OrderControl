@@ -1,10 +1,12 @@
 param(
     [string]$Note = "",
-    [switch]$NoPush
+    [switch]$NoPush,
+    [int]$Bump = 1
 )
 
-# Поднимает версию на единицу, коммитит, ставит тег v0.0.NNN и пушит.
+# Поднимает версию, коммитит, ставит тег v0.0.NNN и пушит.
 # Пуш тега запускает GitHub Actions: сборка, подпись и публикация релиза.
+# -Bump задаёт шаг версии: по умолчанию +1, можно пропустить версии.
 
 $ErrorActionPreference = "Stop"
 
@@ -17,8 +19,9 @@ $text = [IO.File]::ReadAllText($buildFile)
 
 $codeMatch = [regex]::Match($text, 'versionCode = (\d+)')
 if (-not $codeMatch.Success) { throw "versionCode не найден в app/build.gradle.kts" }
+if ($Bump -lt 1) { throw "Bump должен быть не меньше 1" }
 
-$newCode = [int]$codeMatch.Groups[1].Value + 1
+$newCode = [int]$codeMatch.Groups[1].Value + $Bump
 $newName = "0.0.$newCode"
 
 $text = [regex]::Replace($text, 'versionCode = \d+', "versionCode = $newCode")

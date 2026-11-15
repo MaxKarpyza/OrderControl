@@ -9,8 +9,14 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [CallRecord::class, BlacklistEntry::class, AddressAlias::class],
-    version = 7,
+    entities = [
+        CallRecord::class,
+        BlacklistEntry::class,
+        AddressAlias::class,
+        AddressBaseEntry::class,
+        SheetTabEntity::class,
+    ],
+    version = 8,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -21,6 +27,10 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun blacklistDao(): BlacklistDao
 
     abstract fun addressAliasDao(): AddressAliasDao
+
+    abstract fun addressBaseDao(): AddressBaseDao
+
+    abstract fun sheetTabDao(): SheetTabDao
 
     companion object {
         private const val NAME = "ordercontrol.db"
@@ -196,6 +206,41 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * 7 → 8: база адресов и список разобранных вкладок.
+         *
+         * У заказа появился район (подставляется из базы адресов) и отметка
+         * «введён вручную» — по ней сверка с журналом звонков не ищет номер.
+         */
+        val MIGRATION_7_8: Migration = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                val columns = tableColumns(db, "call_records")
+                if ("district" !in columns) {
+                    db.execSQL("ALTER TABLE call_records ADD COLUMN district TEXT")
+                }
+                if ("isManual" !in columns) {
+                    db.execSQL(
+                        "ALTER TABLE call_records ADD COLUMN isManual INTEGER NOT NULL DEFAULT 0",
+                    )
+                }
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS address_base (" +
+                        "`key` TEXT NOT NULL, " +
+                        "`address` TEXT NOT NULL, " +
+                        "`district` TEXT, " +
+                        "`bottles` INTEGER, " +
+                        "`updatedAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`key`))",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS sheet_tabs (" +
+                        "`name` TEXT NOT NULL, " +
+                        "`parsedAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`name`))",
+                )
+            }
+        }
+
         private fun tableColumns(db: SupportSQLiteDatabase, table: String): Set<String> =
             db.query("PRAGMA table_info(`$table`)").use { cursor ->
                 val nameIndex = cursor.getColumnIndexOrThrow("name")
@@ -213,6 +258,7 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_4_5,
                     MIGRATION_5_6,
                     MIGRATION_6_7,
+                    MIGRATION_7_8,
                 )
                 .build()
     }

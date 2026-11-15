@@ -12,7 +12,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.ordercontrol.AppGraph
+import ru.ordercontrol.ui.base.AddressBaseScreen
+import ru.ordercontrol.ui.base.AddressBaseViewModel
 import ru.ordercontrol.ui.list.UnprocessedScreen
 import ru.ordercontrol.ui.onboarding.OnboardingScreen
 import ru.ordercontrol.ui.update.UpdateBanner
@@ -20,9 +23,17 @@ import ru.ordercontrol.ui.update.UpdateBanner
 @Composable
 fun RootScreen() {
     var onboardingDone by remember { mutableStateOf<Boolean?>(null) }
+    val baseViewModel: AddressBaseViewModel = viewModel()
 
     LaunchedEffect(Unit) {
         onboardingDone = AppGraph.settings.isOnboardingDone()
+    }
+
+    // База адресов нужна для подсказок при ручном вводе. Пока её нет,
+    // приложение собирает её с таблицы — это видно и не даёт ввести заказ
+    // вслепую.
+    LaunchedEffect(Unit) {
+        baseViewModel.start()
     }
 
     // Surface задаёт цвет текста по умолчанию. Без него экраны, нарисованные
@@ -37,7 +48,14 @@ fun RootScreen() {
                 when (onboardingDone) {
                     null -> Box(modifier = Modifier.fillMaxSize())
                     false -> OnboardingScreen(onDone = { onboardingDone = true })
-                    true -> UnprocessedScreen()
+                    true -> if (baseViewModel.blocking) {
+                        AddressBaseScreen(
+                            state = baseViewModel.state,
+                            onRetry = baseViewModel::retry,
+                        )
+                    } else {
+                        UnprocessedScreen()
+                    }
                 }
             }
 

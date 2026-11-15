@@ -122,8 +122,16 @@ interface CallRecordDao {
     @Query("SELECT callLogId FROM call_records WHERE callLogId IS NOT NULL")
     suspend fun usedCallLogIds(): List<Long>
 
-    /** Необработанные записи без номера: прошивка не отдала его вовремя. */
-    @Query("SELECT * FROM call_records WHERE isProcessed = 0 AND phoneNormalized IS NULL")
+    /**
+     * Необработанные записи без номера: прошивка не отдала его вовремя.
+     *
+     * Ручные записи пропускаются: у них звонка не было, и номер им
+     * подставлять неоткуда.
+     */
+    @Query(
+        "SELECT * FROM call_records WHERE isProcessed = 0 AND phoneNormalized IS NULL " +
+            "AND isManual = 0",
+    )
     suspend fun openWithoutNumber(): List<CallRecord>
 
     /** Есть ли уже запись об этом звонке — неважно, обработанная или нет. */

@@ -150,6 +150,11 @@ class UnprocessedViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    /** Заказ введён вручную: сообщаем, что он попал в список. */
+    fun notifyManualAdded() {
+        message = getApplication<Application>().getString(R.string.manual_saved)
+    }
+
     /** Снимает отметку «ранее обработана»: адрес снова пойдёт в таблицу. */
     fun clearWrittenBefore(recordId: Long) {
         viewModelScope.launch {

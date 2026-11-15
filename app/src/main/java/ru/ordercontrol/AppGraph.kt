@@ -1,6 +1,7 @@
 package ru.ordercontrol
 
 import android.content.Context
+import ru.ordercontrol.data.AddressBaseRepository
 import ru.ordercontrol.data.CallRepository
 import ru.ordercontrol.data.ContactRepository
 import ru.ordercontrol.data.SettingsRepository
@@ -49,6 +50,15 @@ object AppGraph {
             callDao = database.callRecordDao(),
             client = SheetWriteClient(),
             sheets = sheets,
+        )
+    }
+
+    val addressBase: AddressBaseRepository by lazy {
+        AddressBaseRepository(
+            sheets = sheets,
+            dao = database.addressBaseDao(),
+            tabDao = database.sheetTabDao(),
+            settings = settings,
         )
     }
 

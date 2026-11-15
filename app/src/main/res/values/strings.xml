@@ -52,6 +52,7 @@
     <string name="main_phone">Телефон</string>
     <string name="main_phone_unknown">не определён</string>
     <string name="main_address">Адрес</string>
+    <string name="main_district">Район</string>
     <string name="main_previous_prefix">раньше</string>
     <string name="main_not_filled">не заполнено</string>
     <string name="main_total">Всего: %1$d</string>
@@ -198,4 +199,34 @@
     <string name="action_call">Позвонить</string>
     <string name="action_yes">Да</string>
     <string name="action_no">Нет</string>
+
+    <!-- Ручной ввод заказа -->
+    <string name="manual_add">Добавить заказ</string>
+    <string name="manual_title">Новый заказ</string>
+    <string name="manual_record_title">Ручной заказ</string>
+    <string name="manual_save">Сохранить заказ</string>
+    <string name="manual_saved">Заказ добавлен в незаписанные</string>
+    <string name="manual_save_error">Не удалось сохранить заказ. Попробуйте ещё раз.</string>
+    <string name="manual_district">Район</string>
+    <string name="manual_district_hint">Подставится из базы адресов</string>
+    <string name="manual_bottles_short">%1$d бут.</string>
+    <string name="manual_delivery_hint">Доставка: %1$s</string>
+
+    <!-- База адресов -->
+    <string name="base_building">Собираем базу адресов из таблицы…</string>
+    <string name="base_progress">Разобрано вкладок: %1$d из %2$d</string>
+    <string name="base_failed_title">Не удалось собрать базу адресов</string>
+    <string name="base_retry">Повторить</string>
+    <string name="base_section_title">База адресов</string>
+    <string name="base_section_count">Адресов в базе: %1$d</string>
+    <string name="base_section_updated">Обновлена: %1$s</string>
+    <string name="base_section_refresh">Обновить базу адресов</string>
+
+    <string name="day_monday_short">понедельник</string>
+    <string name="day_tuesday_short">вторник</string>
+    <string name="day_wednesday_short">среда</string>
+    <string name="day_thursday_short">четверг</string>
+    <string name="day_friday_short">пятница</string>
+    <string name="day_saturday_short">суббота</string>
+    <string name="day_sunday_short">воскресенье</string>
 </resources>

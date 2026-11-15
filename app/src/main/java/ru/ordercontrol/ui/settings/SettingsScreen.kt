@@ -44,6 +44,7 @@ import ru.ordercontrol.AppGraph
 import ru.ordercontrol.R
 import ru.ordercontrol.domain.WorkSchedule
 import ru.ordercontrol.ui.DisplayFormat
+import ru.ordercontrol.ui.base.AddressBaseSection
 import ru.ordercontrol.ui.update.UpdateSection
 import ru.ordercontrol.widget.WidgetRefresh
 
@@ -155,6 +156,10 @@ fun SettingsScreen(onBack: () -> Unit) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+
+        HorizontalDivider()
+
+        AddressBaseSection()
 
         HorizontalDivider()
 

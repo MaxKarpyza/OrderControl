@@ -4,7 +4,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,10 +19,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -31,9 +28,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -375,83 +369,6 @@ private fun FormContent(
             Text(stringResource(R.string.form_save))
         }
     }
-}
-
-/**
- * Быстрый выбор количества: 1–5 одной кнопкой. Своё значение оператор
- * по-прежнему вводит в поле выше.
- */
-@Composable
-private fun QuickBottles(
-    selected: String,
-    onSelect: (String) -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        for (count in 1..5) {
-            val value = count.toString()
-            val active = selected == value
-            OutlinedButton(
-                onClick = { onSelect(value) },
-                contentPadding = PaddingValues(vertical = 8.dp),
-                modifier = Modifier.weight(1f),
-                colors = if (active) {
-                    ButtonDefaults.outlinedButtonColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    )
-                } else {
-                    ButtonDefaults.outlinedButtonColors()
-                },
-            ) {
-                Text(
-                    text = value,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-                )
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun DeliveryDayPicker(    options: List<DeliveryDay>,
-    selected: DeliveryDay?,
-    onSelect: (DeliveryDay?) -> Unit,
-) {
-    Text(
-        text = stringResource(R.string.form_delivery_day),
-        style = MaterialTheme.typography.bodyMedium,
-    )
-    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-        options.forEachIndexed { index, day ->
-            SegmentedButton(
-                selected = selected == day,
-                onClick = { onSelect(if (selected == day) null else day) },
-                shape = SegmentedButtonDefaults.itemShape(
-                    index = index,
-                    count = options.size,
-                ),
-                label = {
-                    Text(
-                        text = stringResource(day.labelRes()),
-                        style = MaterialTheme.typography.labelMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
-            )
-        }
-    }
-}
-
-private fun DeliveryDay.labelRes(): Int = when (this) {
-    DeliveryDay.TOMORROW -> R.string.delivery_tomorrow
-    DeliveryDay.DAY_AFTER_TOMORROW -> R.string.delivery_day_after_tomorrow
-    DeliveryDay.MONDAY -> R.string.delivery_monday
-    DeliveryDay.OTHER_DAY -> R.string.delivery_other_day
 }
 
 @Composable
