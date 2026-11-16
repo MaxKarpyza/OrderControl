@@ -217,7 +217,7 @@
     <!-- База адресов -->
     <string name="base_building">Собираем базу адресов из таблицы…</string>
     <string name="base_progress">Разобрано вкладок: %1$d из %2$d</string>
-    <string name="base_failed_title">Не удалось собрать базу адресов</string>
+    <string name="base_banner_text">База адресов не собрана: подсказки по адресу не работают</string>
     <string name="base_retry">Повторить</string>
     <string name="base_section_title">База адресов</string>
     <string name="base_section_count">Адресов в базе: %1$d</string>

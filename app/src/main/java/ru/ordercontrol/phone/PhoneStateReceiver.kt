@@ -21,8 +21,9 @@ import ru.ordercontrol.widget.WidgetRefresh
  * `pendingResult.finish()`: после завершения работы ресивера система может
  * убить процесс, и отложенная задача уже не выполнится.
  *
- * Исходящие звонки не учитываются: журнал отдаёт только входящие,
- * пропущенные и сброшенные.
+ * Исходящие звонки не создают записей: журнал отдаёт только входящие,
+ * пропущенные и сброшенные. Но по исходящим видно, что оператор перезвонил
+ * клиенту и разговор состоялся — такая запись перестаёт быть пропущенной.
  */
 class PhoneStateReceiver : BroadcastReceiver() {
 
@@ -48,16 +49,26 @@ class PhoneStateReceiver : BroadcastReceiver() {
                 at = System.currentTimeMillis(),
             )
 
-            TelephonyManager.EXTRA_STATE_OFFHOOK ->
-                store.markAnswered(subscriptionId = subscriptionId)
+            TelephonyManager.EXTRA_STATE_OFFHOOK -> {
+                // У входящего звонка перед OFFHOOK есть RINGING. Если сеанса
+                // нет — звонок исходящий: оператор звонит клиенту.
+                val incoming = store.markAnswered(subscriptionId = subscriptionId)
+                if (!incoming) store.markOutgoing()
+            }
 
             TelephonyManager.EXTRA_STATE_IDLE -> {
+                val outgoing = store.clearOutgoing()
                 val sessions = store.finish(subscriptionId)
                 if (sessions.isEmpty()) {
                     // Повторный IDLE: звонок уже обработан.
                     WidgetRefresh.updateAll(context.applicationContext)
                 } else {
                     finalizeAsync(context.applicationContext, sessions)
+                }
+                if (outgoing) {
+                    // Исходящий звонок закончился: он мог закрыть пропущенный
+                    // входящий звонок, на который клиент так и не ответил.
+                    checkOutgoingAsync(context.applicationContext)
                 }
             }
         }
@@ -92,6 +103,18 @@ class PhoneStateReceiver : BroadcastReceiver() {
         }
     }
 
+    /**
+     * После исходящего звонка журнал обновляется с задержкой: сразу после
+     * `IDLE` исходящего звонка в нём ещё нет. Через несколько секунд
+     * сверяем журнал — и снимаем «пропущен» у тех, кого оператор перезвонил.
+     */
+    private fun checkOutgoingAsync(context: Context) {
+        backgroundScope.launch {
+            delay(OUTGOING_CATCH_UP_MS)
+            WidgetRefresh.updateAll(context.applicationContext)
+        }
+    }
+
     private companion object {
         const val TAG = "PhoneStateReceiver"
         val receiverScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -100,5 +123,8 @@ class PhoneStateReceiver : BroadcastReceiver() {
 
         /** Через сколько ещё раз проверить журнал после звонка. */
         const val CALL_LOG_CATCH_UP_MS = 6_000L
+
+        /** Через сколько после исходящего звонка искать его в журнале. */
+        const val OUTGOING_CATCH_UP_MS = 10_000L
     }
 }

@@ -6,6 +6,8 @@ data class CallLogEntry(
     val number: String?,
     val date: Long,
     val type: Int,
+    /** Длительность разговора в секундах. */
+    val durationSec: Int = 0,
 ) {
     /** Отвечен ли звонок: тип `INCOMING` означает, что разговор состоялся. */
     val answered: Boolean get() = type == android.provider.CallLog.Calls.INCOMING_TYPE
@@ -24,6 +26,9 @@ interface CallLogSource {
 
     /** Входящие звонки в интервале `[fromMillis, toMillis]`. */
     fun incomingBetween(fromMillis: Long, toMillis: Long): List<CallLogEntry>
+
+    /** Исходящие звонки в интервале `[fromMillis, toMillis]`. */
+    fun outgoingBetween(fromMillis: Long, toMillis: Long): List<CallLogEntry>
 
     /**
      * Какие из [ids] ещё есть в журнале.

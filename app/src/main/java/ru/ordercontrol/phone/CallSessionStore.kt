@@ -49,19 +49,49 @@ class CallSessionStore(context: Context) {
         }
     }
 
-    fun markAnswered(subscriptionId: Int) {
+    /**
+     * Разговор начался.
+     *
+     * @return `true`, если на этой SIM был входящий звонок. `false` значит,
+     *         что звонок исходящий: у входящего есть `RINGING`, у исходящего
+     *         только `OFFHOOK`.
+     */
+    fun markAnswered(subscriptionId: Int): Boolean {
         val sessions = active()
-        if (sessions.isEmpty()) return
+        if (sessions.isEmpty()) return false
         val target = if (subscriptionId >= 0) {
             sessions.firstOrNull { it.subscriptionId == subscriptionId }
         } else {
             sessions.maxByOrNull { it.startedAt }
-        } ?: return
-        if (target.answered) return
-
-        prefs.edit(commit = true) {
-            putString(key(target.subscriptionId), encode(target.copy(answered = true)))
+        } ?: return false
+        if (!target.answered) {
+            prefs.edit(commit = true) {
+                putString(key(target.subscriptionId), encode(target.copy(answered = true)))
+            }
         }
+        return true
+    }
+
+    /**
+     * Исходящий звонок: входящего сеанса нет, а трубку уже взяли.
+     *
+     * Отметка нужна, чтобы в `IDLE` отличить конец исходящего звонка от
+     * конца входящего: по нему сверяется журнал и снимается отметка
+     * «пропущен» у перезвонившего клиента.
+     */
+    fun markOutgoing() {
+        prefs.edit(commit = true) { putBoolean(KEY_OUTGOING, true) }
+    }
+
+    /**
+     * Исходящий звонок закончился.
+     *
+     * @return `true`, если исходящий звонок действительно был.
+     */
+    fun clearOutgoing(): Boolean {
+        if (!prefs.getBoolean(KEY_OUTGOING, false)) return false
+        prefs.edit(commit = true) { remove(KEY_OUTGOING) }
+        return true
     }
 
     fun active(): List<CallSession> = prefs.all.keys
@@ -119,6 +149,7 @@ class CallSessionStore(context: Context) {
     private companion object {
         const val PREFS_NAME = "call_sessions"
         const val KEY_PREFIX = "session_"
+        const val KEY_OUTGOING = "outgoing_active"
         const val SEPARATOR = "\u001F"
     }
 }

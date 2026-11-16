@@ -7,9 +7,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import ru.ordercontrol.AppGraph
 import ru.ordercontrol.data.AddressBaseResult
 
@@ -32,9 +34,9 @@ data class AddressBaseUiState(
 /**
  * База адресов: сборка при первом запуске и обновление дальше.
  *
- * Первый разбор всех вкладок — операция блокирующая: пока базы нет,
- * вводить заказ нечего. Дальше база обновляется сама раз в сутки, а при
- * ошибке — на следующей попытке.
+ * База нужна только для подсказок при ручном вводе адреса, поэтому её
+ * сборка не блокирует работу: заказ по звонку базы не требует. Дальше
+ * база обновляется сама раз в сутки, а при ошибке — на следующей попытке.
  */
 class AddressBaseViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -43,51 +45,78 @@ class AddressBaseViewModel(application: Application) : AndroidViewModel(applicat
 
     private var started = false
 
-    /** Пока база не собрана, ввод заказа недоступен. */
-    val blocking: Boolean
-        get() = state.empty &&
-            (state.phase == AddressBasePhase.Building || state.phase == AddressBasePhase.Failed)
-
     fun start() {
         if (started) return
         started = true
         viewModelScope.launch {
-            val empty = AppGraph.addressBase.isEmpty()
-            state = state.copy(empty = empty, addresses = AppGraph.addressBase.count())
-            if (empty) {
-                build()
-            } else {
-                refreshInBackground()
-            }
+            try {
+                val empty = AppGraph.addressBase.isEmpty()
+                state = state.copy(empty = empty, addresses = AppGraph.addressBase.count())
+                if (empty) {
+                    build()
+                } else {
+                    refreshInBackground()
+                }
 
-            // Приложение может остаться открытым надолго: база обновляется
-            // раз в сутки, пока оно открыто.
-            while (isActive) {
-                delay(CHECK_INTERVAL_MS)
-                refreshInBackground()
+                // Приложение может остаться открытым надолго: база обновляется
+                // раз в сутки, пока оно открыто.
+                while (isActive) {
+                    delay(CHECK_INTERVAL_MS)
+                    try {
+                        refreshInBackground()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        // Одна неудачная попытка не должна выключать
+                        // обновление до перезапуска приложения.
+                        fail(e)
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                fail(e)
             }
         }
     }
 
     /** Повтор после ошибки: разбор запускается заново. */
     fun retry() {
-        viewModelScope.launch { build() }
+        viewModelScope.launch {
+            try {
+                build()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                fail(e)
+            }
+        }
     }
 
     /** Обновление по кнопке в настройках — без ожидания суток. */
     fun refreshNow() {
         viewModelScope.launch {
-            state = state.copy(phase = AddressBasePhase.Building, done = 0, total = 0, error = null)
-            apply(AppGraph.addressBase.refresh())
+            try {
+                state = state.copy(phase = AddressBasePhase.Building, done = 0, total = 0, error = null)
+                apply(AppGraph.addressBase.refresh())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                fail(e)
+            }
         }
     }
 
     /** Первый разбор: со всеми вкладками, с прогрессом. */
     private suspend fun build() {
         state = state.copy(phase = AddressBasePhase.Building, done = 0, total = 0, error = null)
-        val result = AppGraph.addressBase.refresh { done, total ->
-            state = state.copy(done = done, total = total)
-        }
+        // Разбор идёт по сети, а сеть может быть очень слабой: ограничиваем
+        // время, чтобы оператор не ждал в пустом экране минутами.
+        val result = withTimeoutOrNull(BUILD_TIMEOUT_MS) {
+            AppGraph.addressBase.refresh { done, total ->
+                state = state.copy(done = done, total = total)
+            }
+        } ?: AddressBaseResult.Failure("сеть не отвечает")
         apply(result)
     }
 
@@ -100,6 +129,20 @@ class AddressBaseViewModel(application: Application) : AndroidViewModel(applicat
     private suspend fun refreshInBackground() {
         if (!AppGraph.settings.isAddressBaseRefreshDue()) return
         apply(AppGraph.addressBase.refresh())
+    }
+
+    /**
+     * Ошибка вместо результата: сеть отвалилась или таблица не читается.
+     *
+     * Приложение продолжает работать — база адресов нужна только для
+     * подсказок при ручном вводе.
+     */
+    private fun fail(e: Throwable) {
+        Log.w(TAG, "База адресов не обновилась", e)
+        state = state.copy(
+            phase = AddressBasePhase.Failed,
+            error = e.message?.takeIf { it.isNotBlank() } ?: "нет связи",
+        )
     }
 
     private suspend fun apply(result: AddressBaseResult) {
@@ -136,5 +179,8 @@ class AddressBaseViewModel(application: Application) : AndroidViewModel(applicat
 
         /** Как часто проверять, не пора ли обновить базу. */
         const val CHECK_INTERVAL_MS = 15 * 60 * 1000L
+
+        /** Сколько ждёт первый разбор, прежде чем признать сеть мёртвой. */
+        const val BUILD_TIMEOUT_MS = 120_000L
     }
 }

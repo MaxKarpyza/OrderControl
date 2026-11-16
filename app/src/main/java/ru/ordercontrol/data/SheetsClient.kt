@@ -43,7 +43,7 @@ sealed interface SheetFetchResult {
  * сначала берётся список вкладок с их `gid` из `htmlview`, а CSV качается
  * уже по `gid`. Содержимое таблицы не логируется: там адреса и телефоны.
  */
-class SheetsClient(private val baseUrl: String = DEFAULT_BASE_URL) {
+open class SheetsClient(private val baseUrl: String = DEFAULT_BASE_URL) {
 
     /**
      * Скачивает вкладки за [today] и за следующий день.
@@ -104,7 +104,14 @@ class SheetsClient(private val baseUrl: String = DEFAULT_BASE_URL) {
      * история. Страница весит около мегабайта, но скачивается один раз.
      */
     suspend fun fetchAllTabNames(): List<String> = withContext(Dispatchers.IO) {
-        val html = download(editUrl()) ?: return@withContext emptyList()
+        // Сеть может отвалиться в любой момент: без связи список вкладок
+        // не получить. Ошибка здесь — обычное дело, а не повод ронять
+        // приложение, поэтому наружу уходит пустой список.
+        val html = try {
+            download(editUrl())
+        } catch (_: IOException) {
+            return@withContext emptyList()
+        } ?: return@withContext emptyList()
         parseTabNames(html)
     }
 
@@ -170,7 +177,13 @@ class SheetsClient(private val baseUrl: String = DEFAULT_BASE_URL) {
      * GET-запрос.
      * @return тело ответа или `null`, если сервер ответил не 200.
      */
-    private fun download(requestUrl: String): String? {
+    /**
+     * Скачивает страницу.
+     *
+     * Открыт для тестов: в JVM-тестах сети нет, и обрыв связи надо
+     * проверять без настоящего сервера.
+     */
+    protected open fun download(requestUrl: String): String? {
         val connection = URL(requestUrl).openConnection() as HttpURLConnection
         try {
             connection.requestMethod = "GET"

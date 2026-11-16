@@ -63,6 +63,26 @@ interface CallRecordDao {
     )
     suspend fun openWithoutName(): List<CallRecord>
 
+    /**
+     * Необработанные записи, помеченные как пропущенные.
+     *
+     * Их ещё можно «закрыть» перезвоном: если оператор перезвонил клиенту
+     * и разговор состоялся, отметка «пропущен» снимается.
+     */
+    @Query(
+        "SELECT * FROM call_records WHERE isProcessed = 0 AND isAnswered = 0 " +
+            "AND phoneNormalized IS NOT NULL",
+    )
+    suspend fun openMissed(): List<CallRecord>
+
+    /**
+     * Снимает отметку «пропущен»: разговор с клиентом состоялся.
+     *
+     * @return число обновлённых строк: 0, если отметки уже не было.
+     */
+    @Query("UPDATE call_records SET isAnswered = 1 WHERE id = :id AND isAnswered = 0")
+    suspend fun markAnswered(id: Long): Int
+
     @Insert
     suspend fun insert(record: CallRecord): Long
 

@@ -14,7 +14,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.ordercontrol.AppGraph
-import ru.ordercontrol.ui.base.AddressBaseScreen
+import ru.ordercontrol.ui.base.AddressBaseBanner
 import ru.ordercontrol.ui.base.AddressBaseViewModel
 import ru.ordercontrol.ui.list.UnprocessedScreen
 import ru.ordercontrol.ui.onboarding.OnboardingScreen
@@ -30,8 +30,8 @@ fun RootScreen() {
     }
 
     // База адресов нужна для подсказок при ручном вводе. Пока её нет,
-    // приложение собирает её с таблицы — это видно и не даёт ввести заказ
-    // вслепую.
+    // приложение собирает её с таблицы в фоне: работать можно и без неё,
+    // о состоянии сборки говорит плашка внизу экрана.
     LaunchedEffect(Unit) {
         baseViewModel.start()
     }
@@ -48,17 +48,14 @@ fun RootScreen() {
                 when (onboardingDone) {
                     null -> Box(modifier = Modifier.fillMaxSize())
                     false -> OnboardingScreen(onDone = { onboardingDone = true })
-                    true -> if (baseViewModel.blocking) {
-                        AddressBaseScreen(
-                            state = baseViewModel.state,
-                            onRetry = baseViewModel::retry,
-                        )
-                    } else {
-                        UnprocessedScreen()
-                    }
+                    true -> UnprocessedScreen()
                 }
             }
 
+            AddressBaseBanner(
+                state = baseViewModel.state,
+                onRetry = baseViewModel::retry,
+            )
             UpdateBanner()
         }
     }

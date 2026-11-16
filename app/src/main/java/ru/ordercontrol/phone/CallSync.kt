@@ -2,6 +2,7 @@ package ru.ordercontrol.phone
 
 import android.content.Context
 import ru.ordercontrol.AppGraph
+import ru.ordercontrol.domain.CallbackCall
 import ru.ordercontrol.domain.PhoneNormalizer
 
 /**
@@ -21,11 +22,43 @@ object CallSync {
         val taken = AppGraph.calls.usedCallLogIds().toMutableSet()
         fillMissingNumbers(reader, taken)
         backfillCallLogIds(reader, taken)
+        syncCallbacks(reader)
 
         val refs = AppGraph.calls.openCallRefs()
         if (refs.isEmpty()) return
         val existing = reader.existingIds(refs.map { it.callLogId }) ?: return
         AppGraph.calls.reconcileWithCallLog(existing)
+    }
+
+    /**
+     * Снимает отметку «пропущен» с записей, по которым состоялся разговор.
+     *
+     * Оператор мог перезвонить клиенту: входящий звонок тогда остался
+     * пропущенным, хотя клиент уже обслужен. Разговор считается состоявшимся,
+     * если в журнале есть исходящий звонок с ненулевой длительностью и он
+     * случился после пропущенного.
+     *
+     * @return сколько записей перестали быть пропущенными.
+     */
+    suspend fun syncCallbacks(reader: CallLogSource): Int {
+        val pending = AppGraph.calls.openMissed()
+        if (pending.isEmpty()) return 0
+
+        // Журнал смотрим с момента самого раннего пропущенного, но не дальше
+        // полутора месяцев: запись может висеть месяцами, а журнал столько
+        // не хранит.
+        val from = maxOf(
+            pending.minOf { it.incomingAt },
+            System.currentTimeMillis() - MAX_LOOKBACK_MS,
+        )
+        val entries = reader.outgoingBetween(from, Long.MAX_VALUE)
+        if (entries.isEmpty()) return 0
+
+        val callbacks = entries.mapNotNull { entry ->
+            val phone = PhoneNormalizer.normalize(entry.number) ?: return@mapNotNull null
+            CallbackCall(phone = phone, date = entry.date, durationSec = entry.durationSec)
+        }
+        return AppGraph.calls.markAnsweredByCallback(callbacks)
     }
 
     /**
@@ -116,6 +149,9 @@ object CallSync {
         .minByOrNull { kotlin.math.abs(it.date - atMillis) }
 
     private const val WINDOW_MS = 5 * 60 * 1000L
+
+    /** Как далеко назад ищем исходящие звонки. */
+    private const val MAX_LOOKBACK_MS = 45L * 24 * 60 * 60 * 1000L
 
     /** Насколько близко по времени искать уже существующую запись. */
     private const val MATCH_WINDOW_MS = 2 * 60 * 1000L

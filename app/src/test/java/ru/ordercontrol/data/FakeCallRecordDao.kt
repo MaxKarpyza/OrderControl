@@ -70,6 +70,17 @@ class FakeCallRecordDao : CallRecordDao {
     override suspend fun openWithoutName(): List<CallRecord> =
         openRecords().filter { it.phoneNormalized != null && it.displayName.isNullOrEmpty() }
 
+    override suspend fun openMissed(): List<CallRecord> =
+        openRecords().filter { it.isAnswered == false && it.phoneNormalized != null }
+
+    override suspend fun markAnswered(id: Long): Int {
+        val index = records.indexOfFirst { it.id == id && it.isAnswered == false }
+        if (index < 0) return 0
+        records[index] = records[index].copy(isAnswered = true)
+        notifyChanged()
+        return 1
+    }
+
     override suspend fun insert(record: CallRecord): Long = add(record)
 
     override suspend fun update(record: CallRecord) {

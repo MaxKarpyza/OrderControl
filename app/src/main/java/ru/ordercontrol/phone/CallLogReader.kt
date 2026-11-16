@@ -32,6 +32,28 @@ class CallLogReader(private val context: Context) : CallLogSource {
             CallLog.Calls.MISSED_TYPE.toString(),
             CallLog.Calls.REJECTED_TYPE.toString(),
         )
+        return query(selection, args)
+    }
+
+    /**
+     * Исходящие звонки в интервале `[fromMillis, toMillis]`.
+     *
+     * Исходящие звонки не создают записей — по ним видно, что оператор
+     * перезвонил клиенту и разговор состоялся.
+     */
+    override fun outgoingBetween(fromMillis: Long, toMillis: Long): List<CallLogEntry> {
+        if (!hasPermission()) return emptyList()
+        val selection = "${CallLog.Calls.DATE} >= ? AND ${CallLog.Calls.DATE} <= ? " +
+            "AND ${CallLog.Calls.TYPE} = ?"
+        val args = arrayOf(
+            fromMillis.toString(),
+            toMillis.toString(),
+            CallLog.Calls.OUTGOING_TYPE.toString(),
+        )
+        return query(selection, args)
+    }
+
+    private fun query(selection: String, args: Array<String>): List<CallLogEntry> {
         val result = ArrayList<CallLogEntry>()
         try {
             context.contentResolver.query(
@@ -45,12 +67,14 @@ class CallLogReader(private val context: Context) : CallLogSource {
                 val numberIndex = cursor.getColumnIndexOrThrow(CallLog.Calls.NUMBER)
                 val dateIndex = cursor.getColumnIndexOrThrow(CallLog.Calls.DATE)
                 val typeIndex = cursor.getColumnIndexOrThrow(CallLog.Calls.TYPE)
+                val durationIndex = cursor.getColumnIndexOrThrow(CallLog.Calls.DURATION)
                 while (cursor.moveToNext()) {
                     result += CallLogEntry(
                         id = cursor.getLong(idIndex),
                         number = cursor.getString(numberIndex),
                         date = cursor.getLong(dateIndex),
                         type = cursor.getInt(typeIndex),
+                        durationSec = cursor.getInt(durationIndex),
                     )
                 }
             }
@@ -95,6 +119,7 @@ class CallLogReader(private val context: Context) : CallLogSource {
             CallLog.Calls.NUMBER,
             CallLog.Calls.DATE,
             CallLog.Calls.TYPE,
+            CallLog.Calls.DURATION,
         )
         const val QUERY_CHUNK = 400
     }

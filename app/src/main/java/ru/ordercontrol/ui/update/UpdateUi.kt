@@ -31,6 +31,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import ru.ordercontrol.AppGraph
@@ -53,7 +54,15 @@ fun UpdateBanner(modifier: Modifier = Modifier) {
 
     LaunchedEffect(Unit) {
         if (!AppGraph.settings.isUpdateCheckDue()) return@LaunchedEffect
-        val result = AppGraph.updates.check()
+        // Проверка обновления не должна ронять приложение: сеть может
+        // отдавать мусор вместо ответа.
+        val result = try {
+            AppGraph.updates.check()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            return@LaunchedEffect
+        }
         if (result is UpdateCheckResult.Available &&
             !AppGraph.settings.isUpdateDismissed(result.info.versionCode)
         ) {
@@ -179,11 +188,17 @@ fun UpdateSection() {
             onClick = {
                 state = CheckState.Checking
                 scope.launch {
-                    state = when (val result = AppGraph.updates.check()) {
-                        is UpdateCheckResult.Available -> CheckState.Available(result.info)
-                        UpdateCheckResult.UpToDate -> CheckState.UpToDate
-                        UpdateCheckResult.NoNetwork -> CheckState.Error(noNetwork)
-                        is UpdateCheckResult.Failure -> CheckState.Error(failed)
+                    state = try {
+                        when (val result = AppGraph.updates.check()) {
+                            is UpdateCheckResult.Available -> CheckState.Available(result.info)
+                            UpdateCheckResult.UpToDate -> CheckState.UpToDate
+                            UpdateCheckResult.NoNetwork -> CheckState.Error(noNetwork)
+                            is UpdateCheckResult.Failure -> CheckState.Error(failed)
+                        }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        CheckState.Error(failed)
                     }
                 }
             },

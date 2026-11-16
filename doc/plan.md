@@ -79,6 +79,8 @@ ru.ordercontrol
 
 - `PhoneStateReceiver`: RINGING → OFFHOOK → IDLE, отличие входящего от
   исходящего, несколько SIM, `goAsync()`, добор из CallLog.
+- Исходящий звонок не создаёт записи, но по нему сверяется журнал: если
+  разговор состоялся, отметка «пропущен» у клиента снимается.
 - Запись создаётся сразу по состоянию звонка (номер виден оператору без
   задержки). Если номер в `PHONE_STATE` пустой, журнал опрашивается внутри
   работы ресивера (до 5,5 с) — после `finish()` процесс может быть убит.
@@ -143,12 +145,14 @@ ru.ordercontrol
   hiddenNumber): RegistrationPlan` — `Ignore` | `Merge(silent)` | `Create(silent)`.
 - `BlacklistPolicy.suppressesCall(kind)`, `consumesAfterCall(kind)`.
 - `CallLogReconciler.idsToClose(open, existingCallLogIds)`.
+- `CallbackRules.answeredByCallback(phone, missedAt, callbacks: List<CallbackCall>)`.
 - `ContactMatcher.findName(number, contacts)`, `shouldCreate(name, existingName)`.
 - `CallRepository.registerIncoming(numberRaw, answered, incomingAt, callLogId): Long?`,
   `openItems()`, `observeOpenItems()`, `latestOpen()`, `recordById(id)`,
   `previousOpenToday(current)`, `saveOrder(recordId, bottles, address,
   nameInput, skip: SkipUpdate): Boolean`, `markAllProcessed()`, `unreadCount()`,
-  `reconcileWithCallLog(ids)`, `refreshNamesFromContacts()`.
+  `reconcileWithCallLog(ids)`, `refreshNamesFromContacts()`,
+  `openMissed()`, `markAnsweredByCallback(callbacks): Int`.
 - `SettingsRepository.schedule`, `setSchedule(...)`, `contactAccount`,
   `setContactAccount(...)`, `onboardingDone`, `setOnboardingDone()`.
 - `ContactRepository.findName(number)`, `createContactIfAbsent(name, number)`.
@@ -159,7 +163,8 @@ ru.ordercontrol
 
 ## Критерии готовности MVP
 
-1. Входящий звонок создаёт запись после завершения; исходящие игнорируются.
+1. Входящий звонок создаёт запись после завершения; исходящие не создают
+   записей, но снимают отметку «пропущен», если по ним состоялся разговор.
 2. Пропущенный вне рабочего времени не создаёт запись; отвеченный создаёт
    запись всегда.
 3. Повторный звонок до обработки обновляет ту же строку, введённые данные

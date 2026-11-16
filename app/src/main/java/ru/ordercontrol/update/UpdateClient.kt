@@ -267,7 +267,13 @@ class UpdateClient(
     }
 
     private fun parse(body: String): UpdateCheckResult {
-        val json = JSONObject(body)
+        // Ответ может быть не JSON: например, captive-портал отдаёт HTML
+        // с кодом 200. Это не повод ронять приложение.
+        val json = try {
+            JSONObject(body)
+        } catch (_: Exception) {
+            return UpdateCheckResult.Failure("ответ не JSON")
+        }
         val tag = json.optString("tag_name").trim().removePrefix("v").removePrefix("V")
         val versionCode = tag.substringAfterLast('.').toIntOrNull()
             ?: return UpdateCheckResult.Failure("непонятный тег: $tag")

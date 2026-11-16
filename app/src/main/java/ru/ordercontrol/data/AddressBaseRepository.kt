@@ -81,7 +81,7 @@ class AddressBaseRepository(
     ): AddressBaseResult {
         val names = sheets.fetchAllTabNames()
         if (names.isEmpty()) {
-            return AddressBaseResult.Failure("не удалось получить список вкладок")
+            return AddressBaseResult.Failure("нет связи с таблицей")
         }
 
         val parsed = tabDao.parsedNames().toSet()
@@ -159,6 +159,13 @@ class AddressBaseRepository(
             dao.upsertAll(merged.values.filter { it.key in touched })
             tabDao.markParsed(doneTabs.map { SheetTabEntity(name = it, parsedAt = now) })
             settings.setAddressBaseDistricts(vocabulary.districts())
+        }
+
+        if (doneTabs.isEmpty()) {
+            // Ни одну вкладку прочитать не удалось: скорее всего, нет связи.
+            // Это ошибка, а не успех: отметку о разборе ставить нельзя,
+            // иначе следующая попытка отложится на сутки.
+            return AddressBaseResult.Failure("вкладки не прочитаны (нет связи)")
         }
 
         return AddressBaseResult.Success(

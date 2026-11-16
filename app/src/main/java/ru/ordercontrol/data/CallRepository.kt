@@ -11,6 +11,8 @@ import ru.ordercontrol.data.db.CallRecordDao
 import ru.ordercontrol.domain.AddressNormalizer
 import ru.ordercontrol.domain.BlacklistKind
 import ru.ordercontrol.domain.BlacklistPolicy
+import ru.ordercontrol.domain.CallbackCall
+import ru.ordercontrol.domain.CallbackRules
 import ru.ordercontrol.domain.CallLogReconciler
 import ru.ordercontrol.domain.CallRules
 import ru.ordercontrol.domain.CloseReason
@@ -361,6 +363,32 @@ class CallRepository(
     }
 
     suspend fun unreadCount(): Int = callDao.unreadCount().toInt()
+
+    /** Необработанные записи, помеченные как пропущенные. */
+    suspend fun openMissed(): List<CallRecord> = callDao.openMissed()
+
+    /**
+     * Снимает отметку «пропущен» с записей, по которым состоялся разговор.
+     *
+     * Оператор мог перезвонить клиенту: входящий звонок тогда остался
+     * пропущенным, хотя клиент уже обслужен.
+     *
+     * @param callbacks исходящие звонки из журнала.
+     * @return сколько записей перестали быть пропущенными.
+     */
+    suspend fun markAnsweredByCallback(callbacks: List<CallbackCall>): Int {
+        if (callbacks.isEmpty()) return 0
+        val pending = callDao.openMissed()
+        if (pending.isEmpty()) return 0
+
+        var marked = 0
+        for (record in pending) {
+            val phone = record.phoneNormalized ?: continue
+            if (!CallbackRules.answeredByCallback(phone, record.incomingAt, callbacks)) continue
+            if (callDao.markAnswered(record.id) > 0) marked++
+        }
+        return marked
+    }
 
     /**
      * Сколько необработанных записей ждёт оператора и сколько из них
