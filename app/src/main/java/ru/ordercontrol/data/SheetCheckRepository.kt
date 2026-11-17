@@ -44,13 +44,24 @@ class SheetCheckRepository(
     private val callDao: CallRecordDao,
     private val aliasDao: AddressAliasDao,
     private val sheets: SheetsClient,
+    /**
+     * Таблицу скачали: счётчик растёт, а на десятое скачивание обновляется
+     * база адресов.
+     */
+    private val onTableFetched: suspend () -> Unit = {},
 ) {
 
     /**
      * Скачивает вкладки за сегодня и завтра. Ничего не меняет: применение —
      * отдельный шаг [apply], чтобы вызывающий получил итог сверки.
      */
-    suspend fun check(): SheetFetchResult = sheets.fetchTodayAndTomorrow()
+    suspend fun check(): SheetFetchResult {
+        val result = sheets.fetchTodayAndTomorrow()
+        if (result is SheetFetchResult.Success) {
+            onTableFetched()
+        }
+        return result
+    }
 
     suspend fun apply(tabs: List<SheetTab>): SheetCheckOutcome {
         val records = callDao.openWithAddress().map { record ->

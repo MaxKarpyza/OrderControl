@@ -10,6 +10,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import ru.ordercontrol.data.db.AddressBaseEntry
 import ru.ordercontrol.domain.BlacklistKind
 import ru.ordercontrol.domain.CloseReason
 import ru.ordercontrol.domain.DeliveryDay
@@ -22,11 +23,13 @@ class CallRepositoryTest {
     private val blacklistDao = FakeBlacklistDao()
     private val schedule = FakeScheduleProvider()
     private val contacts = FakeContactLookup()
+    private val addressBase = FakeAddressLookup()
     private val repository = CallRepository(
         callDao = callDao,
         blacklistDao = blacklistDao,
         settings = schedule,
         contacts = contacts,
+        addressBase = addressBase,
     )
 
     @Before
@@ -82,6 +85,94 @@ class CallRepositoryTest {
 
         assertEquals(id, second)
         assertTrue(callDao.byId(id)!!.isAnswered!!)
+    }
+
+    @Test
+    fun `operator marks a missed call answered by hand`() = runTest {
+        val id = register(answered = false)!!
+
+        repository.markAnswered(id)
+
+        assertTrue(repository.recordById(id)!!.isAnswered!!)
+    }
+
+    @Test
+    fun `адрес заказа по звонку — это контакт`() = runTest {
+        contacts.put("+79991234567", "Тринити")
+
+        val id = register()!!
+
+        assertEquals("Тринити", repository.recordById(id)!!.addressText)
+    }
+
+    @Test
+    fun `из прошлого заказа по контакту берутся бутыли и район`() = runTest {
+        contacts.put("+79991234567", "Тринити")
+        addressBase.put(
+            AddressBaseEntry(
+                key = "тринити",
+                address = "Тринити",
+                district = "Начальный центр",
+                bottles = 2,
+                updatedAt = 0L,
+            ),
+        )
+
+        val id = register()!!
+        val record = repository.recordById(id)!!
+
+        assertEquals("Тринити", record.addressText)
+        assertEquals("2", record.bottlesText)
+        assertEquals("Начальный центр", record.district)
+    }
+
+    @Test
+    fun `свой адрес и количество оператора не затираются прошлым заказом`() = runTest {
+        contacts.put("+79991234567", "Тринити")
+        addressBase.put(
+            AddressBaseEntry(
+                key = "тринити",
+                address = "Тринити",
+                district = "Начальный центр",
+                bottles = 2,
+                updatedAt = 0L,
+            ),
+        )
+        val id = register()!!
+        repository.saveOrder(
+            recordId = id,
+            bottles = "5",
+            address = "Артема 114",
+            nameInput = null,
+            skip = SkipUpdate.Unchanged,
+            district = "Гладковка",
+        )
+
+        val record = repository.recordById(id)!!
+
+        assertEquals("Артема 114", record.addressText)
+        assertEquals("5", record.bottlesText)
+        assertEquals("Гладковка", record.district)
+    }
+
+    @Test
+    fun `неизвестному номеру адрес не подставляется`() = runTest {
+        val id = register()!!
+
+        val record = repository.recordById(id)!!
+
+        assertEquals("", record.addressText)
+        assertEquals("", record.bottlesText)
+        assertNull(record.district)
+    }
+
+    @Test
+    fun `marking an answered call answered changes nothing`() = runTest {
+        val id = register(answered = true)!!
+
+        repository.markAnswered(id)
+
+        assertTrue(repository.recordById(id)!!.isAnswered!!)
     }
 
     @Test
@@ -249,7 +340,7 @@ class CallRepositoryTest {
     @Test
     fun `failed contact creation is reported but the order is saved`() = runTest {
         val locked = FakeContactLookup(canCreate = false)
-        val repo = CallRepository(callDao, blacklistDao, schedule, locked)
+        val repo = CallRepository(callDao, blacklistDao, schedule, locked, addressBase)
         val id = repo.registerIncoming(
             numberRaw = "+79991234567",
             answered = true,

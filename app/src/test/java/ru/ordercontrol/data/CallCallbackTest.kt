@@ -18,6 +18,7 @@ class CallCallbackTest {
         blacklistDao = FakeBlacklistDao(),
         settings = FakeScheduleProvider(),
         contacts = FakeContactLookup(),
+        addressBase = FakeAddressLookup(),
     )
 
     private val phone = "+79991234567"

@@ -1,11 +1,19 @@
 package ru.ordercontrol.data
 
+import android.util.Log
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import ru.ordercontrol.data.db.AddressBaseDao
 import ru.ordercontrol.data.db.AddressBaseEntry
 import ru.ordercontrol.data.db.SheetTabDao
@@ -35,20 +43,31 @@ sealed interface AddressBaseResult {
  *
  * Источник — вкладки Google Таблицы: в каждой вкладке за день адреса
  * лежат в трёх блоках колонок. Первый раз разбираются все вкладки, дальше —
- * только те, которых ещё не было в базе.
+ * только свежие: вкладки за десять дней до сегодняшнего дня и все более
+ * новые, включая сегодняшнюю. Всю историю не перечитываем: это долго, а
+ * правят адреса в свежих вкладках.
+ *
+ * Обновление происходит на десятое скачивание таблицы (при отправке адресов
+ * и при проверке) и не реже раза в сутки.
  */
 class AddressBaseRepository(
     private val sheets: SheetsClient,
     private val dao: AddressBaseDao,
     private val tabDao: SheetTabDao,
     private val settings: SettingsRepository,
-) {
+) : AddressLookup {
 
     /** Разобранная вкладка: имя и адреса по блокам колонок. */
     private data class ParsedTab(
         val name: String,
         val blocks: List<SheetAddressBlock>,
     )
+
+    /** Обновление идёт в фоне: оператор не ждёт, пока перечитаются вкладки. */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** Обновление не должно пойти в два потока сразу. */
+    private val refreshLock = Mutex()
 
     /** База ещё не собрана — подсказок пока не будет. */
     suspend fun isEmpty(): Boolean = dao.count() == 0
@@ -63,14 +82,39 @@ class AddressBaseRepository(
     }
 
     /** Точное совпадение адреса: район и количество из последнего заказа. */
-    suspend fun find(address: String): AddressBaseEntry? {
+    override suspend fun find(address: String): AddressBaseEntry? {
         val key = AddressNormalizer.normalize(address)
         if (key.isEmpty()) return null
         return dao.find(key)
     }
 
     /**
-     * Обновляет базу: разбирает вкладки, которых в ней ещё нет.
+     * Считает скачивание таблицы.
+     *
+     * Таблицу скачивают при отправке адресов и при проверке. На десятое
+     * скачивание база адресов обновляется: за это время в таблице могли
+     * поправить адреса. И не реже раза в сутки.
+     */
+    suspend fun onTableFetched() {
+        settings.markTableFetched()
+        if (!settings.isAddressBaseRefreshDue()) return
+        // Обновление идёт в фоне: оператор не должен ждать его после
+        // отправки адресов или проверки.
+        scope.launch {
+            try {
+                refresh()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Фоновое обновление не должно ронять приложение: сеть может
+                // отвалиться в любой момент.
+                Log.w(TAG, "Фоновое обновление базы адресов не удалось", e)
+            }
+        }
+    }
+
+    /**
+     * Обновляет базу: перечитывает свежие вкладки.
      *
      * Вкладки идут по датам, поэтому «последний заказ» — это самая свежая
      * строка по адресу. Если в ней район не указан, остаётся район из
@@ -78,6 +122,10 @@ class AddressBaseRepository(
      */
     suspend fun refresh(
         onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
+    ): AddressBaseResult = refreshLock.withLock { refreshLocked(onProgress) }
+
+    private suspend fun refreshLocked(
+        onProgress: (done: Int, total: Int) -> Unit,
     ): AddressBaseResult {
         val names = sheets.fetchAllTabNames()
         if (names.isEmpty()) {
@@ -85,13 +133,17 @@ class AddressBaseRepository(
         }
 
         val parsed = tabDao.parsedNames().toSet()
-        val pending = names
-            .filter { it !in parsed }
-            .mapNotNull { name -> tabDate(name)?.let { name to it } }
-            .sortedBy { it.second }
-            .map { it.first }
+        val pending = selectTabsToRead(
+            names = names,
+            parsed = parsed,
+            today = LocalDate.now(),
+            // Пустая база: без истории подсказок не будет вовсе, поэтому
+            // первый разбор берёт всё.
+            full = dao.count() == 0,
+        )
 
         if (pending.isEmpty()) {
+            markRefreshed()
             return AddressBaseResult.Success(
                 parsedTabs = 0,
                 failedTabs = 0,
@@ -168,11 +220,18 @@ class AddressBaseRepository(
             return AddressBaseResult.Failure("вкладки не прочитаны (нет связи)")
         }
 
+        markRefreshed()
         return AddressBaseResult.Success(
             parsedTabs = doneTabs.size,
             failedTabs = failedTabs.size,
             addresses = dao.count(),
         )
+    }
+
+    /** База обновилась: время обновления и счётчик скачиваний. */
+    private suspend fun markRefreshed() {
+        settings.markAddressBaseRefreshed()
+        settings.resetSheetFetchCount()
     }
 
     /** Обновляет адреса разобранной вкладки, не затирая прежние значения. */
@@ -192,6 +251,8 @@ class AddressBaseRepository(
 
     private companion object {
 
+        const val TAG = "AddressBase"
+
         /** Сколько вкладок качаем одновременно. */
         const val PARALLELISM = 4
 
@@ -205,23 +266,58 @@ class AddressBaseRepository(
          * а по ним видно, какая колонка с районами.
          */
         const val BOOTSTRAP_TABS = 30
-
-        private val TAB_DATE: DateTimeFormatter =
-            DateTimeFormatter.ofPattern("dd.MM.uu", Locale.ROOT)
-
-        /**
-         * Дата вкладки по её имени.
-         *
-         * Кроме дат в документе есть служебные вкладки (`_tg_queue`),
-         * они разбору не подлежат.
-         */
-        fun tabDate(name: String): LocalDate? = try {
-            LocalDate.parse(name.trim(), TAB_DATE)
-        } catch (_: Exception) {
-            null
-        }
     }
 }
+
+/**
+ * Вкладки, которые нужно перечитать при обновлении базы.
+ *
+ * Всю историю не читаем: это долго и тяжело. Перечитываем вкладки за десять
+ * дней до даты обновления и все созданные после неё — включая саму дату
+ * обновления, — а также те, что ещё ни разу не разбирались.
+ *
+ * @param names все вкладки документа.
+ * @param parsed вкладки, которые уже разбирались.
+ * @param today дата обновления.
+ * @param full первый разбор: нужна вся история, иначе подсказок не будет.
+ */
+internal fun selectTabsToRead(
+    names: List<String>,
+    parsed: Set<String>,
+    today: LocalDate,
+    full: Boolean,
+): List<String> {
+    val dated = names.mapNotNull { name -> tabDate(name)?.let { name to it } }
+    if (full) {
+        return dated.sortedBy { it.second }.map { it.first }
+    }
+    val start = today.minusDays(REFRESH_WINDOW_DAYS)
+    return dated
+        .filter { (name, date) -> date >= start || name !in parsed }
+        .sortedBy { it.second }
+        .map { it.first }
+}
+
+/**
+ * Сколько дней назад перечитываются вкладки при обновлении базы.
+ */
+internal const val REFRESH_WINDOW_DAYS = 10L
+
+/**
+ * Дата вкладки по её имени.
+ *
+ * Кроме дат в документе есть служебные вкладки (`_tg_queue`),
+ * они разбору не подлежат.
+ */
+internal fun tabDate(name: String): LocalDate? = try {
+    LocalDate.parse(name.trim(), TAB_DATE)
+} catch (_: Exception) {
+    null
+}
+
+/** Имя вкладки — дата `дд.ММ.гг`. */
+private val TAB_DATE: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("dd.MM.yy", Locale.ROOT)
 
 /**
  * Обновляет адрес в базе по строке таблицы.

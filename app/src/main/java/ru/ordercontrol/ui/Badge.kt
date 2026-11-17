@@ -38,11 +38,17 @@ fun Badge(
     }
 }
 
-/** Принят звонок или пропущен: короткая цветная метка для карточек и формы. */
+/**
+ * Принят звонок или пропущен: короткая цветная метка для карточек и формы.
+ *
+ * @param onMissedClick тап по метке «пропущен»: оператор отвечает клиенту
+ *   позже и хочет считать звонок принятым.
+ */
 @Composable
 fun CallStatusBadge(
     answered: Boolean?,
     modifier: Modifier = Modifier,
+    onMissedClick: (() -> Unit)? = null,
 ) {
     when (answered) {
         true -> Badge(
@@ -54,7 +60,13 @@ fun CallStatusBadge(
 
         false -> Badge(
             text = stringResource(R.string.badge_missed),
-            modifier = modifier,
+            modifier = modifier.then(
+                if (onMissedClick != null) {
+                    Modifier.clickable(onClick = onMissedClick)
+                } else {
+                    Modifier
+                },
+            ),
             containerColor = MaterialTheme.colorScheme.errorContainer,
             contentColor = MaterialTheme.colorScheme.onErrorContainer,
         )
@@ -69,10 +81,14 @@ fun BadgeRow(
     silent: Boolean,
     deliveryDay: DeliveryDay? = null,
     answered: Boolean? = null,
+    manual: Boolean = false,
     previouslyWritten: Boolean = false,
     onPreviouslyWrittenClick: (() -> Unit)? = null,
+    onMissedClick: (() -> Unit)? = null,
 ) {
-    if (!skipped && !silent && deliveryDay == null && answered == null && !previouslyWritten) return
+    if (!skipped && !silent && deliveryDay == null && answered == null && !previouslyWritten && !manual) {
+        return
+    }
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         if (previouslyWritten) {
             Badge(
@@ -86,10 +102,13 @@ fun BadgeRow(
                 contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
             )
         }
+        if (manual) {
+            Badge(text = stringResource(R.string.badge_manual))
+        }
         if (deliveryDay != null) {
             DeliveryBadge(deliveryDay)
         }
-        CallStatusBadge(answered)
+        CallStatusBadge(answered, onMissedClick = onMissedClick)
         if (skipped) {
             Badge(text = stringResource(R.string.badge_skipped))
         }

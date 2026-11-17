@@ -46,11 +46,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.ordercontrol.R
+import ru.ordercontrol.data.db.AddressBaseEntry
 import ru.ordercontrol.data.db.CallRecord
 import ru.ordercontrol.domain.BlacklistKind
 import ru.ordercontrol.domain.DeliveryDay
 import ru.ordercontrol.ui.CallStatusBadge
 import ru.ordercontrol.ui.DisplayFormat
+import ru.ordercontrol.ui.order.OrderAddressField
+import ru.ordercontrol.ui.order.OrderDeliveryHint
 
 @Composable
 fun OrderFormScreen(recordId: Long, onClose: () -> Unit) {
@@ -110,6 +113,8 @@ fun OrderFormScreen(recordId: Long, onClose: () -> Unit) {
                 nameFieldVisible = viewModel.nameFieldVisible,
                 onBottlesChange = viewModel::updateBottles,
                 onAddressChange = viewModel::updateAddress,
+                onSuggestionSelect = viewModel::selectSuggestion,
+                onDistrictChange = viewModel::updateDistrict,
                 onCommentChange = viewModel::updateComment,
                 onWithPhoneChange = viewModel::setWithPhoneInComment,
                 onNameChange = viewModel::updateName,
@@ -131,6 +136,8 @@ private fun FormContent(
     nameFieldVisible: Boolean,
     onBottlesChange: (String) -> Unit,
     onAddressChange: (String) -> Unit,
+    onSuggestionSelect: (AddressBaseEntry) -> Unit,
+    onDistrictChange: (String) -> Unit,
     onCommentChange: (String) -> Unit,
     onWithPhoneChange: (Boolean) -> Unit,
     onNameChange: (String) -> Unit,
@@ -197,6 +204,20 @@ private fun FormContent(
 
             HorizontalDivider()
 
+            // Поля те же, что и при ручном вводе: адрес с подсказками из базы
+            // адресов, количество, район, день доставки и комментарий.
+            OrderAddressField(
+                value = state.address,
+                suggestions = state.suggestions,
+                onValueChange = onAddressChange,
+                onSelect = onSuggestionSelect,
+                supportingText = if (state.knownName != null && state.address.isBlank()) {
+                    { Text(stringResource(R.string.form_address_from_contact, state.knownName)) }
+                } else {
+                    null
+                },
+            )
+
             QuickBottles(
                 selected = state.bottles.trim(),
                 onSelect = onBottlesChange,
@@ -214,25 +235,25 @@ private fun FormContent(
                 modifier = Modifier.fillMaxWidth(),
             )
 
+            OutlinedTextField(
+                value = state.district,
+                onValueChange = onDistrictChange,
+                label = { Text(stringResource(R.string.manual_district)) },
+                placeholder = { Text(stringResource(R.string.manual_district_hint)) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(autoCorrectEnabled = false),
+                modifier = Modifier.fillMaxWidth(),
+            )
+
             DeliveryDayPicker(
                 options = DeliveryDay.optionsAt(record.incomingAt),
                 selected = state.deliveryDay,
                 onSelect = onDeliveryDayChange,
             )
 
-            OutlinedTextField(
-                value = state.address,
-                onValueChange = onAddressChange,
-                label = { Text(stringResource(R.string.form_address)) },
-                placeholder = { Text(stringResource(R.string.form_address_hint)) },
-                supportingText = if (state.knownName != null && state.address.isBlank()) {
-                    { Text(stringResource(R.string.form_address_from_contact, state.knownName)) }
-                } else {
-                    null
-                },
-                minLines = 1,
-                keyboardOptions = KeyboardOptions(autoCorrectEnabled = false),
-                modifier = Modifier.fillMaxWidth(),
+            OrderDeliveryHint(
+                day = state.deliveryDay,
+                at = record.incomingAt,
             )
 
             OutlinedTextField(

@@ -1,13 +1,10 @@
 package ru.ordercontrol.ui.manual
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -25,39 +22,26 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import java.time.DayOfWeek
-import java.time.format.DateTimeFormatter
 import ru.ordercontrol.R
-import ru.ordercontrol.data.db.AddressBaseEntry
 import ru.ordercontrol.domain.DeliveryDay
-import ru.ordercontrol.domain.SheetTarget
 import ru.ordercontrol.ui.form.DeliveryDayPicker
 import ru.ordercontrol.ui.form.QuickBottles
+import ru.ordercontrol.ui.order.OrderAddressField
+import ru.ordercontrol.ui.order.OrderDeliveryHint
 
 /**
  * Карточка ручного ввода заказа: адрес с подсказками из базы адресов,
  * количество бутылей, район, день доставки и комментарий.
+ *
+ * Набор полей и их поведение общие с формой заказа по телефону —
+ * см. [ru.ordercontrol.ui.order.OrderAddressField].
  */
 @Composable
 fun ManualOrderDialog(
@@ -115,7 +99,7 @@ fun ManualOrderDialog(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    AddressField(
+                    OrderAddressField(
                         value = state.address,
                         suggestions = state.suggestions,
                         onValueChange = viewModel::updateAddress,
@@ -153,10 +137,9 @@ fun ManualOrderDialog(
                         onSelect = viewModel::setDeliveryDay,
                     )
 
-                    Text(
-                        text = deliveryHint(state.deliveryDay),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    OrderDeliveryHint(
+                        day = state.deliveryDay,
+                        at = System.currentTimeMillis(),
                     )
 
                     OutlinedTextField(
@@ -189,143 +172,3 @@ fun ManualOrderDialog(
         }
     }
 }
-
-/**
- * Поле адреса с подсказками из базы адресов.
- *
- * Подсказки — помощник, а не замена ввода: они стоят списком под полем,
- * не перехватывают фокус и не закрывают клавиатуру, поэтому оператор может
- * продолжать печатать. Выбранный адрес подставляется в то же поле, курсор
- * остаётся в конце — дописать можно.
- *
- * В подсказке видно район и количество бутылей из последнего заказа:
- * оператор выбирает адрес и сразу видит, что заказ повторный.
- */
-@Composable
-private fun AddressField(
-    value: String,
-    suggestions: List<AddressBaseEntry>,
-    onValueChange: (String) -> Unit,
-    onSelect: (AddressBaseEntry) -> Unit,
-) {
-    var focused by remember { mutableStateOf(false) }
-    var hidden by remember { mutableStateOf(false) }
-    val focusRequester = remember { FocusRequester() }
-
-    val visible = focused && !hidden && value.isNotBlank() && suggestions.isNotEmpty()
-
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        OutlinedTextField(
-            value = value,
-            onValueChange = {
-                hidden = false
-                onValueChange(it)
-            },
-            label = { Text(stringResource(R.string.form_address)) },
-            placeholder = { Text(stringResource(R.string.form_address_hint)) },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(autoCorrectEnabled = false),
-            modifier = Modifier
-                .fillMaxWidth()
-                .focusRequester(focusRequester)
-                .onFocusChanged { focused = it.isFocused }
-                .onPreviewKeyEvent { event ->
-                    // Esc убирает подсказки, но поле остаётся в фокусе.
-                    if (event.type == KeyEventType.KeyDown &&
-                        event.key == Key.Escape &&
-                        visible
-                    ) {
-                        hidden = true
-                        true
-                    } else {
-                        false
-                    }
-                },
-        )
-
-        if (visible) {
-            SuggestionList(
-                suggestions = suggestions,
-                onSelect = {
-                    onSelect(it)
-                    focusRequester.requestFocus()
-                },
-            )
-        }
-    }
-}
-
-/** Список подсказок под полем адреса. */
-@Composable
-private fun SuggestionList(
-    suggestions: List<AddressBaseEntry>,
-    onSelect: (AddressBaseEntry) -> Unit,
-) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(max = 220.dp),
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-    ) {
-        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-            suggestions.forEach { entry ->
-                val details = listOfNotNull(
-                    entry.district,
-                    entry.bottles?.let { stringResource(R.string.manual_bottles_short, it) },
-                ).joinToString(" · ")
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        // Подсказка не забирает фокус: поле остаётся
-                        // активным, клавиатура не прячется.
-                        .focusProperties { canFocus = false }
-                        .clickable { onSelect(entry) }
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                ) {
-                    Text(
-                        text = entry.address,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (details.isNotEmpty()) {
-                        Text(
-                            text = details,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
- * Что будет считаться днём доставки.
- *
- * Неотмеченный день — это сегодня, а по воскресеньям доставки нет:
- * заказ уезжает в понедельник.
- */
-@Composable
-private fun deliveryHint(day: DeliveryDay?): String {
-    val date = SheetTarget.date(System.currentTimeMillis(), day)
-    val weekday = stringResource(dayOfWeekRes(date.dayOfWeek))
-    return stringResource(
-        R.string.manual_delivery_hint,
-        "${date.format(DATE_FORMAT)} ($weekday)",
-    )
-}
-
-private fun dayOfWeekRes(day: DayOfWeek): Int = when (day) {
-    DayOfWeek.MONDAY -> R.string.day_monday_short
-    DayOfWeek.TUESDAY -> R.string.day_tuesday_short
-    DayOfWeek.WEDNESDAY -> R.string.day_wednesday_short
-    DayOfWeek.THURSDAY -> R.string.day_thursday_short
-    DayOfWeek.FRIDAY -> R.string.day_friday_short
-    DayOfWeek.SATURDAY -> R.string.day_saturday_short
-    DayOfWeek.SUNDAY -> R.string.day_sunday_short
-}
-
-private val DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")

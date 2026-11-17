@@ -36,7 +36,8 @@ data class AddressBaseUiState(
  *
  * База нужна только для подсказок при ручном вводе адреса, поэтому её
  * сборка не блокирует работу: заказ по звонку базы не требует. Дальше
- * база обновляется сама раз в сутки, а при ошибке — на следующей попытке.
+ * база обновляется на десятое скачивание таблицы и не реже раза в сутки,
+ * а при ошибке — на следующей попытке.
  */
 class AddressBaseViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -123,8 +124,9 @@ class AddressBaseViewModel(application: Application) : AndroidViewModel(applicat
     /**
      * Фоновое обновление.
      *
-     * Не чаще раза в сутки; при ошибке отметка о разборе не ставится, и
-     * следующая попытка будет через [CHECK_INTERVAL_MS].
+     * Не чаще десяти скачиваний таблицы и не реже раза в сутки; при ошибке
+     * отметка о разборе не ставится, и следующая попытка будет через
+     * [CHECK_INTERVAL_MS].
      */
     private suspend fun refreshInBackground() {
         if (!AppGraph.settings.isAddressBaseRefreshDue()) return
@@ -148,7 +150,6 @@ class AddressBaseViewModel(application: Application) : AndroidViewModel(applicat
     private suspend fun apply(result: AddressBaseResult) {
         when (result) {
             is AddressBaseResult.Success -> {
-                AppGraph.settings.markAddressBaseRefreshed()
                 state = state.copy(
                     phase = AddressBasePhase.Ready,
                     addresses = result.addresses,

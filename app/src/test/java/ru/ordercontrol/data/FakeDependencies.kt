@@ -1,8 +1,10 @@
 package ru.ordercontrol.data
 
 import java.time.DayOfWeek
+import ru.ordercontrol.data.db.AddressBaseEntry
 import ru.ordercontrol.data.db.BlacklistEntry
 import ru.ordercontrol.data.db.BlacklistDao
+import ru.ordercontrol.domain.AddressNormalizer
 import ru.ordercontrol.domain.BlacklistKind
 import ru.ordercontrol.domain.WorkSchedule
 
@@ -56,4 +58,19 @@ class FakeBlacklistDao : BlacklistDao {
     override suspend fun remove(phone: String) {
         entries.remove(phone)
     }
+}
+
+/**
+ * База адресов в памяти: по адресу — район и количество из прошлого заказа.
+ */
+class FakeAddressLookup : AddressLookup {
+
+    private val entries = mutableMapOf<String, AddressBaseEntry>()
+
+    fun put(entry: AddressBaseEntry) {
+        entries[entry.key] = entry
+    }
+
+    override suspend fun find(address: String): AddressBaseEntry? =
+        entries[AddressNormalizer.normalize(address)]
 }

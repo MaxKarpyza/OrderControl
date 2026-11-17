@@ -19,13 +19,19 @@ import androidx.compose.ui.unit.dp
 import ru.ordercontrol.R
 import ru.ordercontrol.data.db.CallRecord
 
-/** Заголовок карточки: имя контакта, номер или «Скрытый номер». */
+/**
+ * Заголовок карточки: имя контакта, номер или «Скрытый номер».
+ *
+ * У ручного заказа заголовком служит адрес: заказ ввели не по звонку,
+ * контакта у него нет, а адрес — главное, что о нём нужно видеть.
+ */
 @Composable
 fun CallRecord.cardTitle(): String =
     displayName?.takeIf { it.isNotBlank() }
         ?: phoneNormalized?.let { DisplayFormat.phone(it) }
         ?: if (isManual) {
-            stringResource(R.string.manual_record_title)
+            deliveryAddress.takeIf { it.isNotBlank() }
+                ?: stringResource(R.string.manual_record_title)
         } else {
             stringResource(R.string.hidden_number)
         }
@@ -57,6 +63,7 @@ fun RecordCardShell(
     showDeliveryBadge: Boolean = true,
     previouslyWritten: Boolean = false,
     onPreviouslyWrittenClick: (() -> Unit)? = null,
+    onMissedClick: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     val futureDelivery = highlightDelivery && record.deliveryDay != null
@@ -103,8 +110,10 @@ fun RecordCardShell(
                 silent = record.isSilent,
                 deliveryDay = if (showDeliveryBadge) record.deliveryDay else null,
                 answered = record.isAnswered,
+                manual = record.isManual,
                 previouslyWritten = previouslyWritten,
                 onPreviouslyWrittenClick = onPreviouslyWrittenClick,
+                onMissedClick = onMissedClick,
             )
 
             InfoLine(
@@ -116,12 +125,17 @@ fun RecordCardShell(
                 label = stringResource(R.string.main_bottles),
                 value = record.bottlesText.ifBlank { stringResource(R.string.main_not_filled) },
             )
-            InfoLine(
-                label = stringResource(R.string.main_address),
-                value = record.deliveryAddress.ifBlank {
-                    stringResource(R.string.main_not_filled)
-                },
-            )
+            // У ручного заказа адрес стоит заголовком — повторять его
+            // отдельной строкой незачем.
+            val addressInTitle = record.isManual && record.deliveryAddress.isNotBlank()
+            if (!addressInTitle) {
+                InfoLine(
+                    label = stringResource(R.string.main_address),
+                    value = record.deliveryAddress.ifBlank {
+                        stringResource(R.string.main_not_filled)
+                    },
+                )
+            }
             record.district?.takeIf { it.isNotBlank() }?.let { district ->
                 InfoLine(
                     label = stringResource(R.string.main_district),

@@ -34,6 +34,7 @@ object AppGraph {
             blacklistDao = database.blacklistDao(),
             settings = settings,
             contacts = contacts,
+            addressBase = addressBase,
         )
     }
 
@@ -42,6 +43,9 @@ object AppGraph {
             callDao = database.callRecordDao(),
             aliasDao = addressAliases,
             sheets = sheets,
+            // Таблицу скачали: растёт счётчик, и на десятое скачивание
+            // обновляется база адресов.
+            onTableFetched = { addressBase.onTableFetched() },
         )
     }
 

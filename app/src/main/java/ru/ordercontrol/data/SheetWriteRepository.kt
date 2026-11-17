@@ -61,6 +61,25 @@ internal suspend fun resolveDistrict(
 }
 
 /**
+ * Заказ для таблицы: адрес, бутыли, комментарий и район.
+ *
+ * Район берётся из записи, а если его там нет — из базы адресов. Заказ,
+ * принятый по телефону, попадает в таблицу с тем же набором полей, что и
+ * ручной: адрес, количество и район.
+ *
+ * @param districtLookup поиск района по адресу, если в записи его нет.
+ */
+internal suspend fun CallRecord.toSheetOrder(
+    districtLookup: suspend (String) -> String?,
+): SheetWriteOrder = SheetWriteOrder(
+    address = deliveryAddress.trim(),
+    bottles = bottlesText.trim(),
+    comment = buildSheetComment(this),
+    district = resolveDistrict(this, districtLookup),
+    otherDay = deliveryDay == DeliveryDay.OTHER_DAY,
+)
+
+/**
  * Запись необработанных заказов в Google Таблицу.
  *
  * Порядок: отбираем заказы → отбрасываем те, которые приложение уже писало
@@ -121,13 +140,7 @@ class SheetWriteRepository(
             val result = client.write(
                 tab = tab,
                 orders = records.map { record ->
-                    SheetWriteOrder(
-                        address = record.deliveryAddress.trim(),
-                        bottles = record.bottlesText.trim(),
-                        comment = commentOf(record),
-                        district = districtOf(record),
-                        otherDay = record.deliveryDay == DeliveryDay.OTHER_DAY,
-                    )
+                    record.toSheetOrder { address -> addressBase.find(address)?.district }
                 },
             )
             done += records.size
@@ -166,6 +179,7 @@ class SheetWriteRepository(
         writtenByTab: Map<String, List<CallRecord>>,
         outcome: MutableOutcome,
     ) {
+        var fetched = false
         for ((tab, records) in writtenByTab) {
             val rows = sheets.fetchTabByName(tab)?.rows
             if (rows == null) {
@@ -173,6 +187,7 @@ class SheetWriteRepository(
                 outcome.notConfirmed.addAll(records.map { it.deliveryAddress })
                 continue
             }
+            fetched = true
 
             val byAddress = rows.associateBy { AddressNormalizer.normalize(it.address) }
             val byCompact = rows.associateBy { AddressNormalizer.compact(it.address) }
@@ -196,6 +211,12 @@ class SheetWriteRepository(
                 }
             }
         }
+
+        // Таблицу скачали: счётчик растёт, а на десятое скачивание
+        // обновляется база адресов.
+        if (fetched) {
+            addressBase.onTableFetched()
+        }
     }
 
     /**
@@ -210,12 +231,6 @@ class SheetWriteRepository(
             .filter { it.isNotEmpty() }
             .toSet()
     }
-
-    private fun commentOf(record: CallRecord): String = buildSheetComment(record)
-
-    /** Район заказа: из записи, а если его нет — из базы адресов. */
-    private suspend fun districtOf(record: CallRecord): String =
-        resolveDistrict(record) { address -> addressBase.find(address)?.district }
 
     private class MutableOutcome(
         val total: Int,

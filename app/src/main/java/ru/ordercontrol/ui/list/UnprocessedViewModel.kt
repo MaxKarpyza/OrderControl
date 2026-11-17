@@ -150,6 +150,22 @@ class UnprocessedViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    /**
+     * Пропущенный звонок помечается принятым: оператор ответил клиенту.
+     */
+    fun markAnswered(recordId: Long) {
+        viewModelScope.launch {
+            val context = getApplication<Application>()
+            try {
+                AppGraph.calls.markAnswered(recordId)
+                WidgetRefresh.updateAll(context)
+                message = context.getString(R.string.main_answered_toast)
+            } catch (_: Exception) {
+                message = context.getString(R.string.main_error)
+            }
+        }
+    }
+
     /** Заказ введён вручную: сообщаем, что он попал в список. */
     fun notifyManualAdded() {
         message = getApplication<Application>().getString(R.string.manual_saved)

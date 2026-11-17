@@ -8,6 +8,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import ru.ordercontrol.data.CallRepository
+import ru.ordercontrol.data.FakeAddressLookup
 import ru.ordercontrol.data.FakeBlacklistDao
 import ru.ordercontrol.data.FakeCallRecordDao
 import ru.ordercontrol.data.FakeContactLookup
@@ -22,6 +23,7 @@ class CallFinalizerTest {
         blacklistDao = FakeBlacklistDao(),
         settings = FakeScheduleProvider(),
         contacts = FakeContactLookup(),
+        addressBase = FakeAddressLookup(),
     )
     private val finalizer = CallFinalizer(calls = repository, callLog = callLog)
 

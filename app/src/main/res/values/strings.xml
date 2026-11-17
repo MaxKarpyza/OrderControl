@@ -61,7 +61,11 @@
     <string name="main_mark_one_processed">Обработан</string>
     <string name="main_one_processed_toast">Запись отмечена обработанной</string>
     <string name="main_written_mark_cleared">Отметка «ранее обработана» снята</string>
+    <string name="main_answered_toast">Звонок отмечен принятым</string>
+    <string name="main_confirm_answered_title">Отметить звонок принятым?</string>
+    <string name="main_confirm_answered_text">Разговор состоялся позже: звонок станет принятым, и заказ можно будет отправить в таблицу.</string>
     <string name="badge_skipped">не клиент</string>
+    <string name="badge_manual">ручной ввод</string>
     <string name="badge_silent">тихо</string>
     <string name="badge_delivery_tomorrow">Доставка завтра</string>
     <string name="badge_delivery_day_after_tomorrow">Доставка послезавтра</string>
@@ -222,6 +226,7 @@
     <string name="base_section_title">База адресов</string>
     <string name="base_section_count">Адресов в базе: %1$d</string>
     <string name="base_section_updated">Обновлена: %1$s</string>
+    <string name="base_section_fetches">Скачиваний таблицы с последнего обновления: %1$d из %2$d</string>
     <string name="base_section_refresh">Обновить базу адресов</string>
 
     <string name="day_monday_short">понедельник</string>

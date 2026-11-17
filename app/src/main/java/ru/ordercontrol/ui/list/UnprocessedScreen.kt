@@ -234,6 +234,7 @@ private fun UnprocessedTab(viewModel: UnprocessedViewModel) {
     var showProcessDialog by rememberSaveable { mutableStateOf(false) }
     var processConfirmed by rememberSaveable { mutableStateOf(false) }
     var pendingProcessId by rememberSaveable { mutableStateOf(0L) }
+    var pendingAnsweredId by rememberSaveable { mutableStateOf(0L) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         when {
@@ -265,6 +266,7 @@ private fun UnprocessedTab(viewModel: UnprocessedViewModel) {
                             )
                         },
                         onProcessed = { pendingProcessId = item.record.id },
+                        onMarkAnswered = { pendingAnsweredId = item.record.id },
                         onClearWritten = { viewModel.clearWrittenBefore(item.record.id) },
                     )
                 }
@@ -378,7 +380,46 @@ private fun UnprocessedTab(viewModel: UnprocessedViewModel) {
                 onDismiss = { pendingProcessId = 0L },
             )
         }
+
+        if (pendingAnsweredId != 0L) {
+            MarkAnsweredDialog(
+                onConfirm = {
+                    val id = pendingAnsweredId
+                    pendingAnsweredId = 0L
+                    if (id != 0L) viewModel.markAnswered(id)
+                },
+                onDismiss = { pendingAnsweredId = 0L },
+            )
+        }
     }
+}
+
+/**
+ * Вопрос перед снятием отметки «пропущен».
+ *
+ * Отметку снимают нечаянно: звонок может быть пропущен по-настоящему, и
+ * тогда заказ в таблицу попасть не должен.
+ */
+@Composable
+private fun MarkAnsweredDialog(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.main_confirm_answered_title)) },
+        text = { Text(stringResource(R.string.main_confirm_answered_text)) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(stringResource(R.string.action_yes))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_no))
+            }
+        },
+    )
 }
 
 @Composable
@@ -707,6 +748,7 @@ private fun RecordCard(
     item: OpenCallItem,
     onEdit: () -> Unit,
     onProcessed: () -> Unit,
+    onMarkAnswered: () -> Unit,
     onClearWritten: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -716,6 +758,8 @@ private fun RecordCard(
         record = item.record,
         previouslyWritten = item.writtenBefore,
         onPreviouslyWrittenClick = if (item.writtenBefore) onClearWritten else null,
+        // Тап по «пропущен» отвечает на звонок задним числом.
+        onMissedClick = if (item.record.isAnswered == false) onMarkAnswered else null,
         headerTrailing = DisplayFormat.callTime(item.record.incomingAt),
         headerAction = phone?.let { number ->
             {

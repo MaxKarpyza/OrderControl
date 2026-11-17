@@ -6,12 +6,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import ru.ordercontrol.AppGraph
 import ru.ordercontrol.data.db.AddressBaseEntry
 import ru.ordercontrol.domain.DeliveryDay
+import ru.ordercontrol.ui.order.BaseAutoFill
+import ru.ordercontrol.ui.order.OrderAddressLookup
 import ru.ordercontrol.widget.WidgetRefresh
 
 /** Состояние карточки ручного ввода заказа. */
@@ -39,10 +39,21 @@ class ManualOrderViewModel(application: Application) : AndroidViewModel(applicat
     var state by mutableStateOf(ManualOrderUiState())
         private set
 
-    /** Район, подставленный из базы: пока его не правили вручную, он обновляется. */
-    private var autoDistrict: String? = null
+    /** Подстановка района и количества из базы адресов. */
+    private val baseFill = BaseAutoFill()
 
-    private var lookupJob: Job? = null
+    /** Поиск адреса в базе адресов: подсказки и точное совпадение. */
+    private val lookup = OrderAddressLookup(
+        scope = viewModelScope,
+        onSuggestions = suggestions@{ text, list ->
+            if (state.address != text) return@suggestions
+            state = state.copy(suggestions = list)
+        },
+        onBase = base@{ text, entry ->
+            if (state.address != text) return@base
+            applyBase(entry)
+        },
+    )
 
     /**
      * Очищает карточку перед новым вводом.
@@ -51,8 +62,8 @@ class ManualOrderViewModel(application: Application) : AndroidViewModel(applicat
      * заказ начинался бы с адреса прошлого.
      */
     fun reset() {
-        lookupJob?.cancel()
-        autoDistrict = null
+        lookup.cancel()
+        baseFill.reset()
         state = ManualOrderUiState()
     }
 
@@ -63,30 +74,13 @@ class ManualOrderViewModel(application: Application) : AndroidViewModel(applicat
 
     fun updateAddress(value: String) {
         state = state.copy(address = value, error = false)
-        lookupJob?.cancel()
-        if (value.isBlank()) {
-            state = state.copy(suggestions = emptyList())
-            return
-        }
-        lookupJob = viewModelScope.launch {
-            // Ждём, пока оператор допечатает: иначе ищем по каждой букве.
-            delay(LOOKUP_DELAY_MS)
-            val suggestions = AppGraph.addressBase.search(value)
-            // Пока искали, текст мог измениться: показываем подсказки только
-            // для того, что реально напечатано.
-            if (state.address != value) return@launch
-            state = state.copy(suggestions = suggestions)
-            applyBase(AppGraph.addressBase.find(value))
-        }
+        lookup.lookup(value)
     }
 
     /** Оператор выбрал адрес из подсказок. */
     fun selectSuggestion(entry: AddressBaseEntry) {
-        // Отменяем поиск: иначе он вернёт подсказки по старому запросу и
-        // список снова вылезет поверх ввода.
-        lookupJob?.cancel()
         state = state.copy(address = entry.address, suggestions = emptyList())
-        applyBase(entry)
+        lookup.select(entry)
     }
 
     fun updateBottles(value: String) {
@@ -95,7 +89,7 @@ class ManualOrderViewModel(application: Application) : AndroidViewModel(applicat
 
     fun updateDistrict(value: String) {
         // Район поправили руками — больше не подставляемый, а свой.
-        autoDistrict = null
+        baseFill.onDistrictEdited()
         state = state.copy(district = value)
     }
 
@@ -115,23 +109,8 @@ class ManualOrderViewModel(application: Application) : AndroidViewModel(applicat
      */
     private fun applyBase(entry: AddressBaseEntry?) {
         if (entry == null) return
-
-        val district = entry.district
-        val current = state.district
-        val newDistrict = if (district != null && (current.isBlank() || current == autoDistrict)) {
-            autoDistrict = district
-            district
-        } else {
-            current
-        }
-
-        val newBottles = if (state.bottles.isBlank()) {
-            entry.bottles?.toString().orEmpty()
-        } else {
-            state.bottles
-        }
-
-        state = state.copy(district = newDistrict, bottles = newBottles)
+        val (district, bottles) = baseFill.apply(entry, state.district, state.bottles)
+        state = state.copy(district = district, bottles = bottles)
     }
 
     /**
@@ -158,10 +137,5 @@ class ManualOrderViewModel(application: Application) : AndroidViewModel(applicat
                 state = state.copy(saving = false, error = true)
             }
         }
-    }
-
-    private companion object {
-        /** Задержка перед поиском подсказок: жмём букву — ищем по целому слову. */
-        const val LOOKUP_DELAY_MS = 250L
     }
 }

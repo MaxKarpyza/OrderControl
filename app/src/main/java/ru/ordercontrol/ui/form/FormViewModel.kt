@@ -14,10 +14,13 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import ru.ordercontrol.AppGraph
+import ru.ordercontrol.data.db.AddressBaseEntry
 import ru.ordercontrol.data.db.CallRecord
 import ru.ordercontrol.domain.BlacklistKind
 import ru.ordercontrol.domain.DeliveryDay
 import ru.ordercontrol.domain.SkipUpdate
+import ru.ordercontrol.ui.order.BaseAutoFill
+import ru.ordercontrol.ui.order.OrderAddressLookup
 import ru.ordercontrol.widget.WidgetRefresh
 
 data class FormUiState(
@@ -25,6 +28,7 @@ data class FormUiState(
     val record: CallRecord? = null,
     val bottles: String = "",
     val address: String = "",
+    val district: String = "",
     val comment: String = "",
     val withPhoneInComment: Boolean = false,
     val nameInput: String = "",
@@ -33,6 +37,8 @@ data class FormUiState(
     val skipKind: BlacklistKind = BlacklistKind.PERMANENT,
     val deliveryDay: DeliveryDay? = null,
     val previous: CallRecord? = null,
+    /** Подсказки адреса из базы адресов. */
+    val suggestions: List<AddressBaseEntry> = emptyList(),
     val saving: Boolean = false,
     val done: Boolean = false,
     val error: Boolean = false,
@@ -53,6 +59,22 @@ class FormViewModel(
     /** Была ли запись помечена «не клиент» до открытия формы. */
     private var initiallySkipped: Boolean = false
 
+    /** Подстановка района и количества из базы адресов. */
+    private val baseFill = BaseAutoFill()
+
+    /** Поиск адреса в базе адресов: подсказки и точное совпадение. */
+    private val lookup = OrderAddressLookup(
+        scope = viewModelScope,
+        onSuggestions = suggestions@{ text, list ->
+            if (state.address != text) return@suggestions
+            state = state.copy(suggestions = list)
+        },
+        onBase = base@{ text, entry ->
+            if (state.address != text) return@base
+            applyBase(entry)
+        },
+    )
+
     val nameFieldVisible: Boolean
         get() = state.record?.phoneNormalized != null && state.knownName.isNullOrBlank()
 
@@ -64,6 +86,7 @@ class FormViewModel(
             // заполненного заказа закрытие всегда спрашивало бы о потере.
             return state.bottles.trim() != record.bottlesText.trim() ||
                 state.address.trim() != record.addressText.trim() ||
+                state.district.trim() != record.district.orEmpty().trim() ||
                 state.comment.trim() != record.comment.trim() ||
                 state.withPhoneInComment != record.withPhoneInComment ||
                 state.nameInput.isNotBlank() ||
@@ -101,6 +124,33 @@ class FormViewModel(
     fun updateAddress(value: String) {
         savedState[KEY_ADDRESS] = value
         state = state.copy(address = value, error = false)
+        lookup.lookup(value)
+    }
+
+    /** Оператор выбрал адрес из подсказок. */
+    fun selectSuggestion(entry: AddressBaseEntry) {
+        savedState[KEY_ADDRESS] = entry.address
+        state = state.copy(address = entry.address, suggestions = emptyList())
+        lookup.select(entry)
+    }
+
+    fun updateDistrict(value: String) {
+        // Район поправили руками — больше не подставляемый, а свой.
+        baseFill.onDistrictEdited()
+        savedState[KEY_DISTRICT] = value
+        state = state.copy(district = value)
+    }
+
+    /**
+     * Подставляет район и количество из базы адресов.
+     *
+     * Количество заменяется, только если оператор его не вводил: свой
+     * выбор он вправе оставить. Район обновляется, пока он не правлен руками.
+     */
+    private fun applyBase(entry: AddressBaseEntry?) {
+        if (entry == null) return
+        val (district, bottles) = baseFill.apply(entry, state.district, state.bottles)
+        state = state.copy(district = district, bottles = bottles)
     }
 
     fun updateComment(value: String) {
@@ -196,6 +246,7 @@ class FormViewModel(
         deliveryDay = state.deliveryDay,
         comment = state.comment,
         withPhoneInComment = state.withPhoneInComment,
+        district = state.district,
     )
 
     private fun resolveSkipUpdate(): SkipUpdate = when {
@@ -208,6 +259,7 @@ class FormViewModel(
     private fun clearDraft() {
         savedState.remove<String>(KEY_BOTTLES)
         savedState.remove<String>(KEY_ADDRESS)
+        savedState.remove<String>(KEY_DISTRICT)
         savedState.remove<String>(KEY_COMMENT)
         savedState.remove<Boolean>(KEY_WITH_PHONE)
         savedState.remove<String>(KEY_NAME)
@@ -233,6 +285,12 @@ class FormViewModel(
 
                 val knownName = record.displayName
                     ?: record.phoneNormalized?.let { AppGraph.contacts.findName(it) }
+                // Заказ по звонку: адрес — это сам контакт. Из базы адресов
+                // берём его прошлый заказ: последнее количество бутылей и
+                // район.
+                val known = AppGraph.addressBase.find(
+                    record.addressText.ifBlank { knownName.orEmpty() },
+                )
                 val activeSkipKind = AppGraph.calls.skipKindFor(record)
                 initiallySkipped = if (record.phoneNormalized == null) {
                     record.isSkipped
@@ -244,10 +302,13 @@ class FormViewModel(
                 state = FormUiState(
                     loading = false,
                     record = record,
-                    bottles = savedState.get<String>(KEY_BOTTLES) ?: record.bottlesText,
-                    // Поле адреса всегда начинается пустым: контакт — это
-                    // адрес по умолчанию, но подставлять его в поле незачем.
-                    address = savedState.get<String>(KEY_ADDRESS) ?: record.addressText,
+                    bottles = savedState.get<String>(KEY_BOTTLES)
+                        ?: record.bottlesText.ifBlank { known?.bottles?.toString().orEmpty() },
+                    address = savedState.get<String>(KEY_ADDRESS)
+                        ?: record.addressText.ifBlank { knownName.orEmpty() },
+                    district = savedState.get<String>(KEY_DISTRICT)
+                        ?: record.district?.takeIf { it.isNotBlank() }
+                        ?: known?.district.orEmpty(),
                     nameInput = savedState.get<String>(KEY_NAME) ?: "",
                     comment = savedState.get<String>(KEY_COMMENT) ?: record.comment,
                     withPhoneInComment = savedState.get<Boolean>(KEY_WITH_PHONE)
@@ -289,6 +350,7 @@ class FormViewModel(
         private const val KEY_RECORD_ID = "record_id"
         private const val KEY_BOTTLES = "bottles"
         private const val KEY_ADDRESS = "address"
+        private const val KEY_DISTRICT = "district"
         private const val KEY_COMMENT = "comment"
         private const val KEY_WITH_PHONE = "with_phone"
         private const val KEY_NAME = "name"

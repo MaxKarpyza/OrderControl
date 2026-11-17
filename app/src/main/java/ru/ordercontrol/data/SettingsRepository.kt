@@ -36,6 +36,7 @@ class SettingsRepository(private val context: Context) : ScheduleProvider {
         val UPDATE_DISMISSED_CODE = intPreferencesKey("update_dismissed_code")
         val ADDRESS_BASE_LAST_REFRESH = longPreferencesKey("address_base_last_refresh")
         val ADDRESS_BASE_DISTRICTS = stringSetPreferencesKey("address_base_districts")
+        val SHEET_FETCH_COUNT = intPreferencesKey("sheet_fetch_count")
     }
 
     val schedule: Flow<WorkSchedule> = context.settingsDataStore.data.map { it.toSchedule() }
@@ -105,9 +106,34 @@ class SettingsRepository(private val context: Context) : ScheduleProvider {
         context.settingsDataStore.edit { it[Keys.ADDRESS_BASE_LAST_REFRESH] = at }
     }
 
-    /** Пора ли обновлять базу адресов: не чаще раза в сутки. */
+    /**
+     * Пора ли обновлять базу адресов.
+     *
+     * На десятое скачивание таблицы — за это время в таблице могли поправить
+     * адреса, — и не реже раза в сутки.
+     */
     suspend fun isAddressBaseRefreshDue(now: Long = System.currentTimeMillis()): Boolean =
-        now - addressBaseLastRefresh() >= ADDRESS_BASE_REFRESH_INTERVAL_MS
+        isRefreshDue(
+            fetchCount = sheetFetchCount(),
+            lastRefreshAt = addressBaseLastRefresh(),
+            now = now,
+        )
+
+    /** Сколько раз таблицу скачивали с последнего обновления базы. */
+    suspend fun sheetFetchCount(): Int =
+        context.settingsDataStore.data.first()[Keys.SHEET_FETCH_COUNT] ?: 0
+
+    /** Таблицу скачали: счётчик растёт. */
+    suspend fun markTableFetched() {
+        context.settingsDataStore.edit { prefs ->
+            prefs[Keys.SHEET_FETCH_COUNT] = (prefs[Keys.SHEET_FETCH_COUNT] ?: 0) + 1
+        }
+    }
+
+    /** База обновилась: счётчик скачиваний сбрасывается. */
+    suspend fun resetSheetFetchCount() {
+        context.settingsDataStore.edit { it.remove(Keys.SHEET_FETCH_COUNT) }
+    }
 
     /** Районы, которые приложение уже научилось отличать от комментариев. */
     suspend fun addressBaseDistricts(): Set<String> =
@@ -137,8 +163,5 @@ class SettingsRepository(private val context: Context) : ScheduleProvider {
     companion object {
         /** Автопроверка обновлений — не чаще двух раз в сутки. */
         private const val UPDATE_CHECK_INTERVAL_MS = 12 * 60 * 60 * 1000L
-
-        /** Обновление базы адресов — не чаще раза в сутки. */
-        private const val ADDRESS_BASE_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000L
     }
 }

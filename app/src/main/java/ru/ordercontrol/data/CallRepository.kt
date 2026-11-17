@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import ru.ordercontrol.data.db.BlacklistDao
 import ru.ordercontrol.data.db.BlacklistEntry
+import ru.ordercontrol.data.db.AddressBaseEntry
 import ru.ordercontrol.data.db.CallRecord
 import ru.ordercontrol.data.db.CallRecordDao
 import ru.ordercontrol.domain.AddressNormalizer
@@ -42,6 +43,7 @@ class CallRepository(
     private val blacklistDao: BlacklistDao,
     private val settings: ScheduleProvider,
     private val contacts: ContactLookup,
+    private val addressBase: AddressLookup,
 ) {
 
     /** Необработанные записи с прошлым заказом номера, реактивно. */
@@ -174,6 +176,9 @@ class CallRepository(
                 comment = "",
                 withPhoneInComment = false,
                 sheetWrittenAt = null,
+                // Район старого адреса новой карточке не подходит: адрес
+                // вводится заново, район подставится из базы адресов.
+                district = null,
             ),
         )
     }
@@ -249,6 +254,10 @@ class CallRepository(
         if (plan is RegistrationPlan.Ignore) return null
 
         val contactName = phone?.let { contacts.findName(it) }
+        // Заказ по звонку: адрес — это сам контакт. Клиент заказывал раньше,
+        // и его прошлый заказ лежит в базе адресов: оттуда берём количество
+        // бутылей и район.
+        val known = knownOrder(contactName)
 
         if (open != null && plan is RegistrationPlan.Merge) {
             callDao.update(
@@ -260,7 +269,7 @@ class CallRepository(
                     // пропущен: запись считается принятой, если принят хотя бы
                     // один из звонков этого номера.
                     isAnswered = answered || open.isAnswered == true,
-                ),
+                ).withKnownOrder(known, contactName),
             )
             return open.id
         }
@@ -272,14 +281,43 @@ class CallRepository(
                 callLogId = callLogId,
                 incomingAt = incomingAt,
                 isAnswered = answered,
-            ),
+            ).withKnownOrder(known, contactName),
         )
     }
+
+    /**
+     * Прошлый заказ по контакту: из него берутся количество бутылей и район.
+     *
+     * Адрес заказа по звонку — это сам контакт, поэтому и ищем по имени
+     * контакта.
+     */
+    private suspend fun knownOrder(contactName: String?): AddressBaseEntry? =
+        addressBase.find(contactName.orEmpty())
+
+    /**
+     * Дополняет пустые поля заказа данными прошлого заказа по контакту.
+     *
+     * Адрес заказа по звонку — это сам контакт: подставляем его всегда.
+     * Количество бутылей и район берём из прошлого заказа по этому адресу —
+     * оператору остаётся их поправить.
+     */
+    private fun CallRecord.withKnownOrder(
+        known: AddressBaseEntry?,
+        contactName: String?,
+    ): CallRecord = copy(
+        addressText = addressText.ifBlank {
+            known?.address ?: contactName?.trim().orEmpty()
+        },
+        bottlesText = bottlesText.ifBlank { known?.bottles?.toString().orEmpty() },
+        district = district?.takeIf { it.isNotBlank() } ?: known?.district,
+    )
 
     /**
      * Сохраняет данные мини-формы. Имя используется только для неизвестного
      * номера: при заполненном имени создаётся контакт, если его ещё нет.
      *
+     * @param district район заказа: подставляется из базы адресов или вводится
+     *   оператором, как и при ручном вводе.
      * @return `true`, если имя было введено, но контакт создать не удалось.
      */
     suspend fun saveOrder(
@@ -291,6 +329,7 @@ class CallRepository(
         deliveryDay: DeliveryDay? = null,
         comment: String = "",
         withPhoneInComment: Boolean = false,
+        district: String = "",
     ): Boolean {
         val record = callDao.findById(recordId) ?: return false
         val phone = record.phoneNormalized
@@ -321,6 +360,7 @@ class CallRepository(
                 deliveryDay = deliveryDay,
                 comment = comment.trim(),
                 withPhoneInComment = withPhoneInComment,
+                district = district.trim().takeIf { it.isNotEmpty() },
             ),
         )
 
@@ -368,13 +408,23 @@ class CallRepository(
     suspend fun openMissed(): List<CallRecord> = callDao.openMissed()
 
     /**
+     * Снимает отметку «пропущен»: разговор с клиентом состоялся.
+     *
+     * Оператор отвечает клиенту позже и отмечает звонок принятым сам:
+     * снятая отметка позволяет записать заказ в таблицу.
+     */
+    suspend fun markAnswered(recordId: Long) {
+        callDao.markAnswered(recordId)
+    }
+
+    /**
      * Снимает отметку «пропущен» с записей, по которым состоялся разговор.
      *
      * Оператор мог перезвонить клиенту: входящий звонок тогда остался
      * пропущенным, хотя клиент уже обслужен.
      *
      * @param callbacks исходящие звонки из журнала.
-     * @return сколько записей перестали быть пропущенными.
+     * @return сколько записей перестали считаться пропущенными.
      */
     suspend fun markAnsweredByCallback(callbacks: List<CallbackCall>): Int {
         if (callbacks.isEmpty()) return 0

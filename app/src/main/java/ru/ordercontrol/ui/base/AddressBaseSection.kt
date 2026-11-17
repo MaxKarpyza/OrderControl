@@ -12,6 +12,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -21,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.ordercontrol.AppGraph
 import ru.ordercontrol.R
+import ru.ordercontrol.data.SHEET_FETCH_LIMIT
 import ru.ordercontrol.ui.DisplayFormat
 
 /**
@@ -34,9 +36,11 @@ fun AddressBaseSection(modifier: Modifier = Modifier) {
     val viewModel: AddressBaseViewModel = viewModel()
     val state = viewModel.state
     var lastRefresh by remember { mutableLongStateOf(0L) }
+    var fetches by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(state.phase, state.addresses) {
         lastRefresh = AppGraph.settings.addressBaseLastRefresh()
+        fetches = AppGraph.settings.sheetFetchCount()
     }
 
     Column(
@@ -61,6 +65,11 @@ fun AddressBaseSection(modifier: Modifier = Modifier) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+        Text(
+            text = stringResource(R.string.base_section_fetches, fetches, SHEET_FETCH_LIMIT),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         state.error?.let {
             Text(
                 text = it,

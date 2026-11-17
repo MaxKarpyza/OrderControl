@@ -5,6 +5,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import ru.ordercontrol.data.CallRepository
+import ru.ordercontrol.data.FakeAddressLookup
 import ru.ordercontrol.data.FakeBlacklistDao
 import ru.ordercontrol.data.FakeCallRecordDao
 import ru.ordercontrol.data.FakeContactLookup
@@ -19,6 +20,7 @@ class CallCatchUpTest {
         blacklistDao = FakeBlacklistDao(),
         settings = FakeScheduleProvider(),
         contacts = FakeContactLookup(),
+        addressBase = FakeAddressLookup(),
     )
 
     private val callAt = 1_793_098_800_000L
