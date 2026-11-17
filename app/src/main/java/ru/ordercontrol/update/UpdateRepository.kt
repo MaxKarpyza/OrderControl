@@ -18,9 +18,12 @@ class UpdateRepository(
 
     suspend fun check(): UpdateCheckResult {
         val result = client.check()
-        if (result != UpdateCheckResult.NoNetwork) {
-            settings.markUpdateChecked()
-        }
+        // Неудачная проверка не должна включать 12-часовой таймер: иначе
+        // из-за разового сбоя сети или лимита GitHub обновление не появится
+        // до следующего окна проверки.
+        val succeeded = result == UpdateCheckResult.UpToDate ||
+            result is UpdateCheckResult.Available
+        if (succeeded) settings.markUpdateChecked()
         return result
     }
 

@@ -54,12 +54,19 @@ class UpdateClient(
 ) {
 
     suspend fun check(): UpdateCheckResult = withContext(Dispatchers.IO) {
-        val body = try {
-            get(latestReleaseUrl())
+        val primary = try {
+            get(latestReleaseUrl())?.let { parse(it) } ?: UpdateCheckResult.Failure("HTTP")
         } catch (_: IOException) {
-            return@withContext UpdateCheckResult.NoNetwork
-        } ?: return@withContext UpdateCheckResult.Failure("HTTP")
-        parse(body)
+            UpdateCheckResult.NoNetwork
+        }
+        // API GitHub без токена отдаёт 60 запросов в час на IP и на остальные
+        // отвечает 403. Страница релиза лимита не имеет, поэтому при любой
+        // неудаче API версию берём из её редиректа.
+        when (primary) {
+            is UpdateCheckResult.Available, UpdateCheckResult.UpToDate,
+            UpdateCheckResult.NoNetwork -> primary
+            is UpdateCheckResult.Failure -> checkViaRedirect() ?: primary
+        }
     }
 
     /**
@@ -281,23 +288,75 @@ class UpdateClient(
 
         val assets = json.optJSONArray("assets")
             ?: return UpdateCheckResult.Failure("в релизе нет файлов")
+        val expected = "$APK_PREFIX$tag.apk"
+        var fallback: UpdateInfo? = null
         for (i in 0 until assets.length()) {
             val asset = assets.optJSONObject(i) ?: continue
             val name = asset.optString("name")
             val url = asset.optString("browser_download_url")
             if (!name.endsWith(".apk", ignoreCase = true) || url.isBlank()) continue
-            return UpdateCheckResult.Available(
+            val info = UpdateInfo(
+                versionName = tag,
+                versionCode = versionCode,
+                notes = json.optString("body").trim(),
+                apkName = name,
+                apkUrl = url,
+                sizeBytes = asset.optLong("size"),
+            )
+            if (name.equals(expected, ignoreCase = true)) {
+                return UpdateCheckResult.Available(info)
+            }
+            if (fallback == null) fallback = info
+        }
+        return fallback?.let { UpdateCheckResult.Available(it) }
+            ?: UpdateCheckResult.Failure("в релизе нет APK")
+    }
+
+    /**
+     * Версия из редиректа `github.com/<repo>/releases/latest` — без API и без
+     * лимита запросов. Файл собирается по тому же имени, что публикует
+     * `release.yml`: `OrderControl-<версия>.apk`.
+     */
+    private fun checkViaRedirect(): UpdateCheckResult? {
+        return try {
+            val connection =
+                URL("https://github.com/$repo/releases/latest").openConnection() as HttpURLConnection
+            val location = try {
+                connection.instanceFollowRedirects = false
+                connection.connectTimeout = TIMEOUT_MS
+                connection.readTimeout = TIMEOUT_MS
+                connection.setRequestProperty("User-Agent", USER_AGENT)
+                if (connection.responseCode !in 300..399) {
+                    null
+                } else {
+                    connection.getHeaderField("Location")
+                }
+            } finally {
+                connection.disconnect()
+            }
+            val tag = location
+                ?.takeIf { it.contains("/tag/") }
+                ?.substringAfterLast("/tag/")
+                ?.trim()
+                ?.removePrefix("v")
+                ?.removePrefix("V")
+                ?.takeIf { it.isNotBlank() }
+                ?: return null
+            val versionCode = tag.substringAfterLast('.').toIntOrNull() ?: return null
+            if (versionCode <= currentVersionCode) return UpdateCheckResult.UpToDate
+            UpdateCheckResult.Available(
                 UpdateInfo(
                     versionName = tag,
                     versionCode = versionCode,
-                    notes = json.optString("body").trim(),
-                    apkName = name,
-                    apkUrl = url,
-                    sizeBytes = asset.optLong("size"),
+                    notes = "",
+                    apkName = "$APK_PREFIX$tag.apk",
+                    apkUrl = "https://github.com/$repo/releases/download/v$tag/$APK_PREFIX$tag.apk",
+                    sizeBytes = 0L,
                 ),
             )
+        } catch (_: IOException) {
+            null
         }
-        return UpdateCheckResult.Failure("в релизе нет APK")
     }
 
     private fun verify(file: File, info: UpdateInfo) {
@@ -334,6 +393,7 @@ class UpdateClient(
 
     private companion object {
         const val UPDATES_DIR = "updates"
+        const val APK_PREFIX = "OrderControl-"
         const val TIMEOUT_MS = 15_000
         const val READ_TIMEOUT_MS = 30_000
         const val BUFFER_SIZE = 64 * 1024

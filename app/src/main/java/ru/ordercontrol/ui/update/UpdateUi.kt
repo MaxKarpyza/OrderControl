@@ -50,7 +50,7 @@ fun UpdateBanner(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var info by remember { mutableStateOf<UpdateInfo?>(null) }
-    var hidden by remember { mutableStateOf(false) }
+    var hiddenVersion by remember { mutableStateOf<Int?>(null) }
 
     LaunchedEffect(Unit) {
         if (!AppGraph.settings.isUpdateCheckDue()) return@LaunchedEffect
@@ -71,7 +71,8 @@ fun UpdateBanner(modifier: Modifier = Modifier) {
     }
 
     val available = info ?: return
-    if (hidden) return
+    // Скрытие привязано к версии: когда выйдет следующая, плашка покажется снова.
+    if (hiddenVersion == available.versionCode) return
 
     val install = remember { UpdateInstallState(context, scope) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { install.refreshPermission() }
@@ -125,7 +126,7 @@ fun UpdateBanner(modifier: Modifier = Modifier) {
                 }
             }
             TextButton(
-                onClick = { install.start(available) { hidden = true } },
+                onClick = { install.start(available) { hiddenVersion = available.versionCode } },
                 enabled = !install.downloading,
             ) {
                 Text(
@@ -137,7 +138,7 @@ fun UpdateBanner(modifier: Modifier = Modifier) {
             }
             IconButton(
                 onClick = {
-                    hidden = true
+                    hiddenVersion = available.versionCode
                     scope.launch { AppGraph.settings.dismissUpdate(available.versionCode) }
                 },
             ) {
@@ -308,6 +309,8 @@ private class UpdateInstallState(
                     onProgress = { percent = it },
                     onStatus = { status = it },
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 error = context.getString(R.string.update_download_failed)
                 downloading = false
@@ -318,6 +321,8 @@ private class UpdateInstallState(
             try {
                 ApkInstaller.install(context, apk)
                 onInstallerOpened()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 error = context.getString(R.string.update_install_failed)
             } finally {
