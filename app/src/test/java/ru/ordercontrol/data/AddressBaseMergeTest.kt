@@ -28,6 +28,30 @@ class AddressBaseMergeTest {
     }
 
     @Test
+    fun `same address written differently is found by compact spelling`() {
+        val entries = listOf(
+            AddressBaseEntry(
+                key = "артема 114 кв 2 314",
+                address = "Артёма 114, кв. 2-314",
+                district = "Центр",
+            ),
+        )
+
+        val found = compactMatch(entries, "Артема 114 2 314")
+
+        assertEquals("Центр", found?.district)
+    }
+
+    @Test
+    fun `different house numbers are not the same address`() {
+        val entries = listOf(
+            AddressBaseEntry(key = "ленина 1", address = "Ленина 1", district = "Центр"),
+        )
+
+        assertNull(compactMatch(entries, "Ленина 12"))
+    }
+
+    @Test
     fun `empty district keeps the old one`() {
         val merged = mergeAddressEntry(
             old,

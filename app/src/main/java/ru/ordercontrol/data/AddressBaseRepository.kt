@@ -81,11 +81,19 @@ class AddressBaseRepository(
         return dao.search(key, limit)
     }
 
-    /** Точное совпадение адреса: район и количество из последнего заказа. */
+    /**
+     * Адрес в базе: район и количество из последнего заказа.
+     *
+     * Сначала точное совпадение нормализованного адреса. Если его нет,
+     * сравниваем «сжатое» написание — без пробелов, дефисов и слов вроде
+     * «кв.»: в таблице один и тот же адрес пишут по-разному, и из-за
+     * этого район терялся.
+     */
     override suspend fun find(address: String): AddressBaseEntry? {
         val key = AddressNormalizer.normalize(address)
         if (key.isEmpty()) return null
-        return dao.find(key)
+        dao.find(key)?.let { return it }
+        return compactMatch(dao.all(), address)
     }
 
     /**
@@ -318,6 +326,24 @@ internal fun tabDate(name: String): LocalDate? = try {
 /** Имя вкладки — дата `дд.ММ.гг`. */
 private val TAB_DATE: DateTimeFormatter =
     DateTimeFormatter.ofPattern("dd.MM.yy", Locale.ROOT)
+
+/**
+ * Адрес из базы с тем же «сжатым» написанием, что и [address].
+ *
+ * Сжатое написание — нормализованный адрес без пробелов: «Артёма 114, кв.
+ * 2-314» и «артема 114 2 314» дают одну строку. Номера квартир и домов
+ * остаются, поэтому разные адреса не склеиваются.
+ *
+ * @return запись базы или `null`, если подходящей нет.
+ */
+internal fun compactMatch(
+    entries: List<AddressBaseEntry>,
+    address: String,
+): AddressBaseEntry? {
+    val compact = AddressNormalizer.compact(address)
+    if (compact.isEmpty()) return null
+    return entries.firstOrNull { AddressNormalizer.compact(it.address) == compact }
+}
 
 /**
  * Обновляет адрес в базе по строке таблицы.

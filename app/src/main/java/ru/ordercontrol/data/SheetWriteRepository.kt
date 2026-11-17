@@ -47,8 +47,9 @@ internal fun buildSheetComment(record: CallRecord): String {
  *
  * Сначала район из самой записи: у ручных заказов его подставляет база
  * адресов или вводит оператор. У заказов по звонку района в записи нет —
- * тогда он ищется по адресу в базе адресов, а если и там нет, ячейка
- * остаётся пустой.
+ * тогда он ищется в базе адресов: по адресу доставки, затем по адресу из
+ * поля ввода и по контакту. Названия у одного адреса бывают разными, поэтому
+ * одного написания мало. Если не нашлось ничего, ячейка остаётся пустой.
  *
  * @param lookup поиск района по адресу.
  */
@@ -57,7 +58,18 @@ internal suspend fun resolveDistrict(
     lookup: suspend (String) -> String?,
 ): String {
     record.district?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
-    return lookup(record.deliveryAddress)?.trim()?.takeIf { it.isNotEmpty() }.orEmpty()
+    val candidates = listOf(
+        record.deliveryAddress,
+        record.addressText,
+        record.displayName.orEmpty(),
+    )
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .distinct()
+    for (address in candidates) {
+        lookup(address)?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+    }
+    return ""
 }
 
 /**

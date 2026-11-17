@@ -10,10 +10,12 @@ class SheetWriteDistrictTest {
     private fun record(
         address: String = "Кочубея 4",
         district: String? = null,
+        name: String? = null,
     ) = CallRecord(
         id = 1L,
         phoneNormalized = null,
         incomingAt = 0L,
+        displayName = name,
         addressText = address,
         district = district,
     )
@@ -44,6 +46,28 @@ class SheetWriteDistrictTest {
         val district = resolveDistrict(record()) { "  " }
 
         assertEquals("", district)
+    }
+
+    @Test
+    fun `если адреса в базе нет, район ищется по контакту`() = runTest {
+        val district = resolveDistrict(
+            record(address = "ЧП Петров", name = "Кофейня На Бульваре (Аня)"),
+        ) { address ->
+            if (address == "Кофейня На Бульваре (Аня)") "Центр" else null
+        }
+
+        assertEquals("Центр", district)
+    }
+
+    @Test
+    fun `район по адресу важнее района по контакту`() = runTest {
+        val district = resolveDistrict(
+            record(address = "Кочубея 4", name = "Кофейня На Бульваре (Аня)"),
+        ) { address ->
+            if (address == "Кочубея 4") "Гладковка" else "Центр"
+        }
+
+        assertEquals("Гладковка", district)
     }
 
     @Test
