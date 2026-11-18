@@ -11,8 +11,11 @@
 - URL веб-приложения:
   `https://script.google.com/macros/s/AKfycbx--hHP_xxnAL-_Hth_RPK8Rt7n1COT6SlpdBIi8qolJVcuWbhKzWKt1fUp_YOMwkXp-A/exec`
 - Доступ: «Все», запуск от имени владельца. Токена нет — URL и есть пароль.
-- Проверено: `GET` возвращает `{"ok":true,"service":"ordercontrol","tabs":[...]}`,
+- Проверено: `GET` возвращает `{"ok":true,"service":"ordercontrol","version":2,"tabs":[...]}`,
   `POST` с несуществующей вкладкой возвращает `tab_not_found`.
+- `version` — версия развёрнутого скрипта. По ней видно, обновилось ли
+  развёртывание: `GET` без `version` означает, что работает старая версия
+  (до записи района в колонку `M`).
 
 URL зашит в приложении константой: менять — только новой сборкой.
 
@@ -135,7 +138,7 @@ function doGet() {
     .map(function (s) {
       return s.getName();
     });
-  return respond({ ok: true, service: "ordercontrol", tabs: tabs });
+  return respond({ ok: true, service: "ordercontrol", version: 2, tabs: tabs });
 }
 
 function doPost(e) {
