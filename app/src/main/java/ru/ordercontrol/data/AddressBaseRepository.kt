@@ -74,6 +74,17 @@ class AddressBaseRepository(
 
     suspend fun count(): Int = dao.count()
 
+    /**
+     * Число адресов по районам — порядок районов в выпадающем списке.
+     *
+     * Считаем по всей базе: дат заказов в ней нет, поэтому «за последние
+     * 90 дней» посчитать нельзя без повторного разбора всех вкладок.
+     */
+    suspend fun districtUsage(): Map<String, Int> =
+        dao.districtCounts().mapNotNull { entry ->
+            entry.district?.trim()?.takeIf { it.isNotEmpty() }?.let { it to entry.count }
+        }.toMap()
+
     /** Подсказки по подстроке адреса. */
     suspend fun search(query: String, limit: Int = SUGGESTION_LIMIT): List<AddressBaseEntry> {
         val key = AddressNormalizer.normalize(query)

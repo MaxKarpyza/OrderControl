@@ -5,6 +5,9 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 
+/** Сколько адресов в базе приходится на район. */
+data class DistrictCount(val district: String?, val count: Int)
+
 @Dao
 interface AddressBaseDao {
 
@@ -29,6 +32,14 @@ interface AddressBaseDao {
             "ORDER BY address LIMIT :limit",
     )
     suspend fun search(key: String, limit: Int): List<AddressBaseEntry>
+
+    /** Число адресов по районам: порядок районов в выпадающем списке. */
+    @Query(
+        "SELECT district, COUNT(*) AS count FROM address_base " +
+            "WHERE district IS NOT NULL AND TRIM(district) != '' " +
+            "GROUP BY district",
+    )
+    suspend fun districtCounts(): List<DistrictCount>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(entries: List<AddressBaseEntry>)

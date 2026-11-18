@@ -21,6 +21,7 @@ import ru.ordercontrol.domain.DeliveryDay
 import ru.ordercontrol.domain.SkipUpdate
 import ru.ordercontrol.ui.order.BaseAutoFill
 import ru.ordercontrol.ui.order.OrderAddressLookup
+import ru.ordercontrol.ui.order.districtOptions
 import ru.ordercontrol.widget.WidgetRefresh
 
 data class FormUiState(
@@ -39,6 +40,8 @@ data class FormUiState(
     val previous: CallRecord? = null,
     /** Подсказки адреса из базы адресов. */
     val suggestions: List<AddressBaseEntry> = emptyList(),
+    /** Районы для выпадающего списка. */
+    val districts: List<String> = emptyList(),
     val saving: Boolean = false,
     val done: Boolean = false,
     val error: Boolean = false,
@@ -297,6 +300,10 @@ class FormViewModel(
                 } else {
                     record.isSkipped && activeSkipKind != null
                 }
+                val districts = districtOptions(
+                    AppGraph.settings.addressBaseDistricts(),
+                    AppGraph.addressBase.districtUsage(),
+                )
 
                 // Несохранённый ввод переживает поворот и смерть процесса.
                 state = FormUiState(
@@ -314,6 +321,7 @@ class FormViewModel(
                     withPhoneInComment = savedState.get<Boolean>(KEY_WITH_PHONE)
                         ?: record.withPhoneInComment,
                     knownName = knownName,
+                    districts = districts,
                     deliveryDay = when (val savedDay = savedState.get<String>(KEY_DELIVERY_DAY)) {
                         null -> record.deliveryDay
                         NO_DELIVERY_DAY -> null

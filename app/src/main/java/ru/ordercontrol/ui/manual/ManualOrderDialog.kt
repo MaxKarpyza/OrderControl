@@ -33,6 +33,7 @@ import ru.ordercontrol.R
 import ru.ordercontrol.domain.DeliveryDay
 import ru.ordercontrol.ui.form.DeliveryDayPicker
 import ru.ordercontrol.ui.form.QuickBottles
+import ru.ordercontrol.ui.order.DistrictField
 import ru.ordercontrol.ui.order.OrderAddressField
 import ru.ordercontrol.ui.order.OrderDeliveryHint
 
@@ -121,14 +122,10 @@ fun ManualOrderDialog(
                         modifier = Modifier.fillMaxWidth(),
                     )
 
-                    OutlinedTextField(
+                    DistrictField(
                         value = state.district,
-                        onValueChange = viewModel::updateDistrict,
-                        label = { Text(stringResource(R.string.manual_district)) },
-                        placeholder = { Text(stringResource(R.string.manual_district_hint)) },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(autoCorrectEnabled = false),
-                        modifier = Modifier.fillMaxWidth(),
+                        districts = state.districts,
+                        onSelect = viewModel::updateDistrict,
                     )
 
                     DeliveryDayPicker(

@@ -214,7 +214,8 @@
     <string name="manual_saved">Заказ добавлен в незаписанные</string>
     <string name="manual_save_error">Не удалось сохранить заказ. Попробуйте ещё раз.</string>
     <string name="manual_district">Район</string>
-    <string name="manual_district_hint">Подставится из базы адресов</string>
+    <string name="district_select">Выберите район</string>
+    <string name="district_list_empty">Список районов ещё не собран</string>
     <string name="manual_bottles_short">%1$d бут.</string>
     <string name="manual_delivery_hint">Доставка: %1$s</string>
 

@@ -52,6 +52,7 @@ import ru.ordercontrol.domain.BlacklistKind
 import ru.ordercontrol.domain.DeliveryDay
 import ru.ordercontrol.ui.CallStatusBadge
 import ru.ordercontrol.ui.DisplayFormat
+import ru.ordercontrol.ui.order.DistrictField
 import ru.ordercontrol.ui.order.OrderAddressField
 import ru.ordercontrol.ui.order.OrderDeliveryHint
 
@@ -235,14 +236,10 @@ private fun FormContent(
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            OutlinedTextField(
+            DistrictField(
                 value = state.district,
-                onValueChange = onDistrictChange,
-                label = { Text(stringResource(R.string.manual_district)) },
-                placeholder = { Text(stringResource(R.string.manual_district_hint)) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(autoCorrectEnabled = false),
-                modifier = Modifier.fillMaxWidth(),
+                districts = state.districts,
+                onSelect = onDistrictChange,
             )
 
             DeliveryDayPicker(

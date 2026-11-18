@@ -12,6 +12,7 @@ import ru.ordercontrol.data.db.AddressBaseEntry
 import ru.ordercontrol.domain.DeliveryDay
 import ru.ordercontrol.ui.order.BaseAutoFill
 import ru.ordercontrol.ui.order.OrderAddressLookup
+import ru.ordercontrol.ui.order.districtOptions
 import ru.ordercontrol.widget.WidgetRefresh
 
 /** Состояние карточки ручного ввода заказа. */
@@ -22,6 +23,8 @@ data class ManualOrderUiState(
     val comment: String = "",
     val deliveryDay: DeliveryDay? = null,
     val suggestions: List<AddressBaseEntry> = emptyList(),
+    /** Районы для выпадающего списка. */
+    val districts: List<String> = emptyList(),
     val saving: Boolean = false,
     /** Заказ сохранён: событие, которое карточка читает и сразу сбрасывает. */
     val saved: Boolean = false,
@@ -55,6 +58,18 @@ class ManualOrderViewModel(application: Application) : AndroidViewModel(applicat
         },
     )
 
+    init {
+        // Список районов не зависит от введённого заказа: читаем один раз,
+        // чтобы не трогать настройки при каждом обновлении состояния.
+        viewModelScope.launch {
+            val districts = districtOptions(
+                AppGraph.settings.addressBaseDistricts(),
+                AppGraph.addressBase.districtUsage(),
+            )
+            state = state.copy(districts = districts)
+        }
+    }
+
     /**
      * Очищает карточку перед новым вводом.
      *
@@ -64,7 +79,8 @@ class ManualOrderViewModel(application: Application) : AndroidViewModel(applicat
     fun reset() {
         lookup.cancel()
         baseFill.reset()
-        state = ManualOrderUiState()
+        // Список районов не сбрасываем: он не относится к введённому заказу.
+        state = ManualOrderUiState(districts = state.districts)
     }
 
     /** Событие «заказ сохранён» читается один раз. */
