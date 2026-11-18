@@ -72,6 +72,11 @@ data class CallRecord(
      */
     @ColumnInfo(defaultValue = "0")
     val isManual: Boolean = false,
+    /**
+     * Когда запись ушла в общую историю операторов (вкладка `history`).
+     * `null` — ещё не отправляли.
+     */
+    val historySentAt: Long? = null,
 ) {
     /**
      * Адрес доставки. Контакт и есть адрес: если оператор не ввёл в поле

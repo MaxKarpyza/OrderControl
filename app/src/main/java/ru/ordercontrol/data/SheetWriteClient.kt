@@ -1,8 +1,6 @@
 package ru.ordercontrol.data
 
 import java.io.IOException
-import java.net.HttpURLConnection
-import java.net.URL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -60,31 +58,7 @@ class SheetWriteClient(private val endpointUrl: String = DEFAULT_ENDPOINT) {
         }
 
     /** POST и чтение тела ответа; `null`, если сервер ответил не 200. */
-    private fun post(body: String): String? {
-        val connection = URL(endpointUrl).openConnection() as HttpURLConnection
-        try {
-            connection.requestMethod = "POST"
-            connection.doOutput = true
-            connection.connectTimeout = TIMEOUT_MS
-            connection.readTimeout = TIMEOUT_MS
-            connection.instanceFollowRedirects = true
-            connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
-            connection.setRequestProperty("Accept", "application/json")
-            connection.setRequestProperty("User-Agent", USER_AGENT)
-            connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
-
-            if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                // Тело ошибки тоже может быть JSON с причиной.
-                val error = connection.errorStream?.use {
-                    it.readBytes().toString(Charsets.UTF_8)
-                }
-                return error?.takeIf { it.startsWith("{") }
-            }
-            return connection.inputStream.use { it.readBytes().toString(Charsets.UTF_8) }
-        } finally {
-            connection.disconnect()
-        }
-    }
+    private fun post(body: String): String? = WebAppPost.post(endpointUrl, body)
 
     private fun parse(response: String, tab: String): SheetWriteResult {
         val json = try {
@@ -124,9 +98,6 @@ class SheetWriteClient(private val endpointUrl: String = DEFAULT_ENDPOINT) {
          */
         const val DEFAULT_ENDPOINT =
             "https://script.google.com/macros/s/AKfycbx--hHP_xxnAL-_Hth_RPK8Rt7n1COT6SlpdBIi8qolJVcuWbhKzWKt1fUp_YOMwkXp-A/exec"
-
-        private const val TIMEOUT_MS = 20_000
-        private const val USER_AGENT = "OrderControl/1.0 (Android)"
     }
 }
 

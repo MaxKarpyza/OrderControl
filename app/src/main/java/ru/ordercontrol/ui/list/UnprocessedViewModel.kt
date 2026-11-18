@@ -11,6 +11,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import ru.ordercontrol.AppGraph
@@ -41,6 +42,9 @@ class UnprocessedViewModel(application: Application) : AndroidViewModel(applicat
 
     var processing by mutableStateOf(false)
         private set
+
+    /** Отложенная отправка в общую историю: несколько отметок — один запрос. */
+    private var historySyncJob: Job? = null
 
     var message by mutableStateOf<String?>(null)
         private set
@@ -129,6 +133,7 @@ class UnprocessedViewModel(application: Application) : AndroidViewModel(applicat
                 AppGraph.calls.markAllProcessed()
                 WidgetRefresh.updateAll(context)
                 message = context.getString(R.string.main_processed_toast)
+                syncSharedHistory()
             } catch (_: Exception) {
                 message = context.getString(R.string.main_error)
             } finally {
@@ -138,15 +143,33 @@ class UnprocessedViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     /** Отмечает обработанной одну запись из списка. */
-    fun markProcessed(recordId: Long) {        viewModelScope.launch {
+    fun markProcessed(recordId: Long) {
+        viewModelScope.launch {
             val context = getApplication<Application>()
             try {
                 AppGraph.calls.markProcessed(recordId)
                 WidgetRefresh.updateAll(context)
                 message = context.getString(R.string.main_one_processed_toast)
+                syncSharedHistory()
             } catch (_: Exception) {
                 message = context.getString(R.string.main_error)
             }
+        }
+    }
+
+    /**
+     * Отправляет только что закрытые записи в общую историю операторов.
+     *
+     * Прогресс показывать не нужно: это служебное действие, но другие
+     * операторы должны увидеть обработку сразу, а не после следующей записи
+     * в таблицу. Пауза нужна, чтобы отметка нескольких записей подряд
+     * обошлась одним запросом.
+     */
+    private fun syncSharedHistory() {
+        historySyncJob?.cancel()
+        historySyncJob = viewModelScope.launch {
+            delay(HISTORY_SYNC_DELAY_MS)
+            runCatching { AppGraph.historySync.sync() }
         }
     }
 
@@ -202,6 +225,8 @@ class UnprocessedViewModel(application: Application) : AndroidViewModel(applicat
                     is SheetFetchResult.Success -> {
                         sheetTabs = result.tabs
                         showOutcome(AppGraph.sheetChecks.apply(result.tabs))
+                        // Сверка могла закрыть записи — делимся ими сразу.
+                        syncSharedHistory()
                     }
 
                     is SheetFetchResult.NoNetwork -> {
@@ -235,6 +260,7 @@ class UnprocessedViewModel(application: Application) : AndroidViewModel(applicat
                 AppGraph.sheetChecks.confirmAlias(match.recordAddress, match.row.address)
                 message = context.getString(R.string.sheet_alias_saved)
                 showOutcome(AppGraph.sheetChecks.apply(sheetTabs))
+                syncSharedHistory()
             } catch (e: Exception) {
                 Log.e(TAG, "Не удалось сохранить синоним", e)
                 fail(R.string.sheet_alias_error)
@@ -370,5 +396,8 @@ class UnprocessedViewModel(application: Application) : AndroidViewModel(applicat
 
     private companion object {
         const val TAG = "SheetCheck"
+
+        /** Пауза перед отправкой в общую историю: склеивает отметки подряд. */
+        const val HISTORY_SYNC_DELAY_MS = 1_500L
     }
 }

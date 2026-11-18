@@ -23,6 +23,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -68,6 +69,8 @@ fun SettingsScreen(onBack: () -> Unit) {
     var days by remember { mutableStateOf(WorkSchedule.DEFAULT_DAYS) }
     var error by remember { mutableStateOf<String?>(null) }
     var loaded by remember { mutableStateOf(false) }
+    var operatorId by remember { mutableStateOf("") }
+    var operatorName by remember { mutableStateOf("") }
     val invalidDaysMessage = stringResource(R.string.settings_invalid)
 
     LaunchedEffect(Unit) {
@@ -75,6 +78,9 @@ fun SettingsScreen(onBack: () -> Unit) {
         startMinute = schedule.startMinute
         endMinute = schedule.endMinute
         days = schedule.days
+        val operator = AppGraph.settings.operator()
+        operatorId = operator.id
+        operatorName = operator.name.orEmpty()
         loaded = true
     }
 
@@ -159,6 +165,24 @@ fun SettingsScreen(onBack: () -> Unit) {
 
         HorizontalDivider()
 
+        Text(
+            text = stringResource(R.string.history_author),
+            style = MaterialTheme.typography.titleMedium,
+        )
+
+        OutlinedTextField(
+            value = operatorName,
+            onValueChange = { operatorName = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text(stringResource(R.string.settings_operator_name)) },
+            supportingText = {
+                Text(stringResource(R.string.settings_operator_hint, operatorId))
+            },
+            singleLine = true,
+        )
+
+        HorizontalDivider()
+
         AddressBaseSection()
 
         HorizontalDivider()
@@ -189,6 +213,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                             days = days,
                         ),
                     )
+                    AppGraph.settings.setOperatorName(operatorName)
                     WidgetRefresh.updateAll(context)
                     onBack()
                 }

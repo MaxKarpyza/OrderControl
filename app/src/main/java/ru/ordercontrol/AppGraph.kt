@@ -4,6 +4,8 @@ import android.content.Context
 import ru.ordercontrol.data.AddressBaseRepository
 import ru.ordercontrol.data.CallRepository
 import ru.ordercontrol.data.ContactRepository
+import ru.ordercontrol.data.HistorySyncClient
+import ru.ordercontrol.data.HistorySyncRepository
 import ru.ordercontrol.data.SettingsRepository
 import ru.ordercontrol.data.SheetCheckRepository
 import ru.ordercontrol.data.SheetWriteClient
@@ -11,6 +13,7 @@ import ru.ordercontrol.data.SheetWriteRepository
 import ru.ordercontrol.data.SheetsClient
 import ru.ordercontrol.data.db.AddressAliasDao
 import ru.ordercontrol.data.db.AppDatabase
+import ru.ordercontrol.data.db.SharedHistoryDao
 import ru.ordercontrol.update.UpdateRepository
 
 /** Ручной контейнер зависимостей: приложение маленькое, DI-фреймворк не нужен. */
@@ -25,6 +28,18 @@ object AppGraph {
     val contacts: ContactRepository by lazy { ContactRepository(appContext, settings) }
 
     val addressAliases: AddressAliasDao by lazy { database.addressAliasDao() }
+
+    val sharedHistory: SharedHistoryDao by lazy { database.sharedHistoryDao() }
+
+    /** Чужие обработанные заказы из вкладки `history` Google Таблицы. */
+    val historySync: HistorySyncRepository by lazy {
+        HistorySyncRepository(
+            callDao = database.callRecordDao(),
+            sharedDao = sharedHistory,
+            client = HistorySyncClient(),
+            operators = settings,
+        )
+    }
 
     val sheets: SheetsClient by lazy { SheetsClient() }
 
@@ -55,6 +70,7 @@ object AppGraph {
             client = SheetWriteClient(),
             sheets = sheets,
             addressBase = addressBase,
+            history = historySync,
         )
     }
 

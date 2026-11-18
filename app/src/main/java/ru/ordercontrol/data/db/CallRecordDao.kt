@@ -205,4 +205,22 @@ interface CallRecordDao {
     /** Снимает отметку «писала в таблицу»: адрес снова считается новым. */
     @Query("UPDATE call_records SET sheetWrittenAt = NULL WHERE id IN (:ids)")
     suspend fun clearSheetWritten(ids: List<Long>)
+
+    /**
+     * Обработанные записи, ещё не отправленные в общую историю операторов.
+     *
+     * Берутся только записи с телефоном: ради номера общая история и нужна.
+     * Окно ограничено сроком хранения строки во вкладке — то, что старше,
+     * всё равно удалится раньше, чем его кто-нибудь прочитает.
+     */
+    @Query(
+        "SELECT * FROM call_records WHERE isProcessed = 1 AND closeReason IN (:reasons) " +
+            "AND phoneNormalized IS NOT NULL AND phoneNormalized != '' " +
+            "AND historySentAt IS NULL AND processedAt >= :since ORDER BY processedAt ASC",
+    )
+    suspend fun unsentToHistory(reasons: List<CloseReason>, since: Long): List<CallRecord>
+
+    /** Отмечает записи отправленными в общую историю. */
+    @Query("UPDATE call_records SET historySentAt = :at WHERE id IN (:ids)")
+    suspend fun markHistorySent(ids: List<Long>, at: Long)
 }

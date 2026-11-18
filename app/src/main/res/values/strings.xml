@@ -92,6 +92,15 @@
     <string name="history_search_empty_hint">Попробуйте изменить запрос.</string>
     <string name="history_restore">Вернуть в необработанные</string>
     <string name="history_restored">Запись возвращена в необработанные</string>
+    <string name="history_filter_mine">Мои</string>
+    <string name="history_filter_all">Все</string>
+    <string name="history_refresh">Обновить историю</string>
+    <string name="history_sync_done">Общая история обновлена: чужих записей %1$d</string>
+    <string name="history_sync_error">Не удалось обновить историю: %1$s</string>
+    <string name="history_sync_outdated">Общая история не работает: скрипт в таблице не обновлён</string>
+    <string name="history_author">Оператор</string>
+    <string name="history_empty_others">У других операторов записи уже есть.</string>
+    <string name="history_show_all">Показать всех</string>
 
     <!-- Проверка по Google Таблице -->
     <string name="sheet_check">Проверить таблицу</string>
@@ -140,6 +149,8 @@
     <string name="settings_save">Сохранить</string>
     <string name="settings_version">Версия %1$s</string>
     <string name="settings_invalid">Выберите хотя бы один рабочий день</string>
+    <string name="settings_operator_name">Имя, отчество</string>
+    <string name="settings_operator_hint">Подпись в общей истории операторов. Пусто — «%1$s».</string>
 
     <!-- Обновления -->
     <string name="update_section_title">Обновления</string>

@@ -103,6 +103,7 @@ class SheetWriteRepository(
     private val client: SheetWriteClient,
     private val sheets: SheetsClient,
     private val addressBase: AddressBaseRepository,
+    private val history: HistorySyncRepository,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
 
@@ -130,6 +131,10 @@ class SheetWriteRepository(
         if (pending.isNotEmpty()) {
             writeAndVerify(pending, outcome, onProgress)
         }
+
+        // Заодно обмениваемся общей историей: таблицу в этот момент всё равно
+        // пишем и скачиваем. Ошибка обмена не должна заслонять итог записи.
+        runCatching { history.sync() }
 
         return outcome.toResult()
     }

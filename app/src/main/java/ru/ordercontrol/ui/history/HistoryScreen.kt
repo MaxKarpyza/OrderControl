@@ -6,16 +6,23 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -24,6 +31,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -31,15 +39,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.ordercontrol.R
 import ru.ordercontrol.data.db.CallRecord
+import ru.ordercontrol.data.db.SharedHistoryEntry
 import ru.ordercontrol.ui.DisplayFormat
 import ru.ordercontrol.ui.InfoLine
 import ru.ordercontrol.ui.RecordCardShell
 
-/** Обработанные заявки: поиск по контактам и адресам, звонок из карточки. */
+/**
+ * Обработанные заявки: свои и чужие (общая история операторов), поиск по
+ * контактам и адресам, звонок из карточки.
+ */
 @Composable
 fun HistoryScreen(modifier: Modifier = Modifier) {
     val viewModel: HistoryViewModel = viewModel()
@@ -63,6 +76,13 @@ fun HistoryScreen(modifier: Modifier = Modifier) {
                 )
             }
 
+            FilterRow(
+                onlyMine = viewModel.onlyMine,
+                syncing = viewModel.syncing,
+                onOnlyMineChange = viewModel::showOnlyMine,
+                onRefresh = viewModel::refresh,
+            )
+
             when {
                 viewModel.loading -> Box(
                     modifier = Modifier
@@ -73,9 +93,18 @@ fun HistoryScreen(modifier: Modifier = Modifier) {
                     CircularProgressIndicator()
                 }
 
-                viewModel.items.isEmpty() -> EmptyHistory(Modifier.weight(1f))
+                viewModel.visibleItems.isEmpty() -> when {
+                    viewModel.query.isNotBlank() -> EmptySearch(Modifier.weight(1f))
 
-                viewModel.visibleItems.isEmpty() -> EmptySearch(Modifier.weight(1f))
+                    // Своих записей нет, а у других уже есть: подсказываем
+                    // про переключатель, иначе история выглядит пустой.
+                    viewModel.onlyMine && viewModel.hasOthers ->
+                        EmptyOnlyMine(Modifier.weight(1f)) {
+                            viewModel.showOnlyMine(false)
+                        }
+
+                    else -> EmptyHistory(Modifier.weight(1f))
+                }
 
                 else -> LazyColumn(
                     modifier = Modifier
@@ -84,11 +113,15 @@ fun HistoryScreen(modifier: Modifier = Modifier) {
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    items(viewModel.visibleItems, key = { it.id }) { record ->
-                        HistoryCard(
-                            record = record,
-                            onRestore = { viewModel.restore(record.id) },
-                        )
+                    items(viewModel.visibleItems, key = { it.key }) { item ->
+                        when (item) {
+                            is HistoryItem.Mine -> HistoryCard(
+                                record = item.record,
+                                onRestore = { viewModel.restore(item.record.id) },
+                            )
+
+                            is HistoryItem.Other -> SharedHistoryCard(item.entry)
+                        }
                     }
                 }
             }
@@ -136,6 +169,50 @@ private fun SearchField(
     )
 }
 
+/** Переключатель «Мои / Все» и ручное обновление общей истории. */
+@Composable
+private fun FilterRow(
+    onlyMine: Boolean,
+    syncing: Boolean,
+    onOnlyMineChange: (Boolean) -> Unit,
+    onRefresh: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        FilterChip(
+            selected = onlyMine,
+            onClick = { onOnlyMineChange(true) },
+            label = { Text(stringResource(R.string.history_filter_mine)) },
+        )
+        FilterChip(
+            selected = !onlyMine,
+            onClick = { onOnlyMineChange(false) },
+            label = { Text(stringResource(R.string.history_filter_all)) },
+        )
+        Spacer(Modifier.weight(1f))
+        if (syncing) {
+            CircularProgressIndicator(
+                modifier = Modifier
+                    .size(24.dp)
+                    .padding(end = 4.dp),
+                strokeWidth = 2.dp,
+            )
+        } else {
+            IconButton(onClick = onRefresh) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = stringResource(R.string.history_refresh),
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun HistoryCard(record: CallRecord, onRestore: () -> Unit) {
     val context = LocalContext.current
@@ -145,13 +222,7 @@ private fun HistoryCard(record: CallRecord, onRestore: () -> Unit) {
         showDeliveryBadge = false,
         headerAction = record.phoneNormalized?.let { phone ->
             {
-                IconButton(
-                    onClick = {
-                        context.startActivity(
-                            Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone")),
-                        )
-                    },
-                ) {
+                IconButton(onClick = { context.dial(phone) }) {
                     Icon(
                         imageVector = Icons.Default.Phone,
                         contentDescription = stringResource(R.string.action_call),
@@ -179,8 +250,101 @@ private fun HistoryCard(record: CallRecord, onRestore: () -> Unit) {
     }
 }
 
+/**
+ * Карточка чужой записи: читается и обзванивается, но менять её нельзя —
+ * запись принадлежит другому оператору и живёт в таблице до истечения срока.
+ */
+@Composable
+private fun SharedHistoryCard(entry: SharedHistoryEntry) {
+    val context = LocalContext.current
+    val addressInTitle = entry.address.isNotBlank()
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = if (addressInTitle) {
+                        entry.address
+                    } else {
+                        DisplayFormat.phone(entry.phone)
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = { context.dial(entry.phone) }) {
+                    Icon(
+                        imageVector = Icons.Default.Phone,
+                        contentDescription = stringResource(R.string.action_call),
+                    )
+                }
+            }
+
+            InfoLine(
+                label = stringResource(R.string.main_phone),
+                value = DisplayFormat.phone(entry.phone),
+            )
+            if (entry.bottles.isNotBlank()) {
+                InfoLine(
+                    label = stringResource(R.string.main_bottles),
+                    value = entry.bottles,
+                )
+            }
+            if (!addressInTitle) {
+                InfoLine(
+                    label = stringResource(R.string.main_address),
+                    value = entry.address.ifBlank { stringResource(R.string.main_not_filled) },
+                )
+            }
+            entry.district?.takeIf { it.isNotBlank() }?.let { district ->
+                InfoLine(
+                    label = stringResource(R.string.main_district),
+                    value = district,
+                )
+            }
+            entry.comment.takeIf { it.isNotBlank() }?.let { comment ->
+                InfoLine(
+                    label = stringResource(R.string.form_comment),
+                    value = comment,
+                )
+            }
+            InfoLine(
+                label = stringResource(R.string.history_author),
+                value = entry.author,
+            )
+            InfoLine(
+                label = stringResource(R.string.history_processed_time),
+                value = DisplayFormat.fullDateTime(entry.processedAt),
+            )
+        }
+    }
+}
+
+private fun android.content.Context.dial(phone: String) {
+    startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone")))
+}
+
 @Composable
 private fun EmptyHistory(modifier: Modifier) {
+    EmptyMessage(
+        modifier = modifier,
+        title = stringResource(R.string.history_empty),
+        hint = stringResource(R.string.history_empty_hint),
+    )
+}
+
+@Composable
+private fun EmptyOnlyMine(modifier: Modifier, onShowAll: () -> Unit) {
     Box(
         modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center,
@@ -195,16 +359,28 @@ private fun EmptyHistory(modifier: Modifier) {
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
-                text = stringResource(R.string.history_empty_hint),
+                text = stringResource(R.string.history_empty_others),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            TextButton(onClick = onShowAll) {
+                Text(stringResource(R.string.history_show_all))
+            }
         }
     }
 }
 
 @Composable
 private fun EmptySearch(modifier: Modifier) {
+    EmptyMessage(
+        modifier = modifier,
+        title = stringResource(R.string.history_search_empty),
+        hint = stringResource(R.string.history_search_empty_hint),
+    )
+}
+
+@Composable
+private fun EmptyMessage(modifier: Modifier, title: String, hint: String) {
     Box(
         modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center,
@@ -215,11 +391,11 @@ private fun EmptySearch(modifier: Modifier) {
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                text = stringResource(R.string.history_search_empty),
+                text = title,
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
-                text = stringResource(R.string.history_search_empty_hint),
+                text = hint,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

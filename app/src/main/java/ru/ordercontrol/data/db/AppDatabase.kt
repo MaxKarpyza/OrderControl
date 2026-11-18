@@ -15,8 +15,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         AddressAlias::class,
         AddressBaseEntry::class,
         SheetTabEntity::class,
+        SharedHistoryEntry::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -31,6 +32,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun addressBaseDao(): AddressBaseDao
 
     abstract fun sheetTabDao(): SheetTabDao
+
+    abstract fun sharedHistoryDao(): SharedHistoryDao
 
     companion object {
         private const val NAME = "ordercontrol.db"
@@ -241,6 +244,35 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * 8 → 9: общая история операторов.
+         *
+         * У записи появилась отметка «отправлена в общую историю», а чужие
+         * обработанные заказы хранятся отдельной таблицей: своя история
+         * по-прежнему выбирается из `call_records`.
+         */
+        val MIGRATION_8_9: Migration = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                val columns = tableColumns(db, "call_records")
+                if ("historySentAt" !in columns) {
+                    db.execSQL("ALTER TABLE call_records ADD COLUMN historySentAt INTEGER")
+                }
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS shared_history (" +
+                        "`remoteId` TEXT NOT NULL, " +
+                        "`author` TEXT NOT NULL, " +
+                        "`phone` TEXT NOT NULL, " +
+                        "`address` TEXT NOT NULL, " +
+                        "`district` TEXT, " +
+                        "`bottles` TEXT NOT NULL, " +
+                        "`comment` TEXT NOT NULL, " +
+                        "`processedAt` INTEGER NOT NULL, " +
+                        "`syncedAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`remoteId`))",
+                )
+            }
+        }
+
         private fun tableColumns(db: SupportSQLiteDatabase, table: String): Set<String> =
             db.query("PRAGMA table_info(`$table`)").use { cursor ->
                 val nameIndex = cursor.getColumnIndexOrThrow("name")
@@ -259,6 +291,7 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_5_6,
                     MIGRATION_6_7,
                     MIGRATION_7_8,
+                    MIGRATION_8_9,
                 )
                 .build()
     }

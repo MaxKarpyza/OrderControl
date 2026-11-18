@@ -225,6 +225,23 @@ class FakeCallRecordDao : CallRecordDao {
         notifyChanged()
     }
 
+    override suspend fun unsentToHistory(
+        reasons: List<CloseReason>,
+        since: Long,
+    ): List<CallRecord> = records.filter { record ->
+        record.isProcessed &&
+            record.closeReason in reasons &&
+            !record.phoneNormalized.isNullOrEmpty() &&
+            record.historySentAt == null &&
+            (record.processedAt ?: 0L) >= since
+    }
+
+    override suspend fun markHistorySent(ids: List<Long>, at: Long) {
+        val target = ids.toSet()
+        records.replaceAll { if (it.id in target) it.copy(historySentAt = at) else it }
+        notifyChanged()
+    }
+
     private fun notifyChanged() {
         changes.value = changes.value + 1
     }

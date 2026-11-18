@@ -10,9 +10,13 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import java.time.DayOfWeek
+import java.util.UUID
+import kotlin.random.Random
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import ru.ordercontrol.domain.WorkSchedule
 
 /** Аккаунт, в который пишутся новые контакты. `null` — локальная книга. */
@@ -21,9 +25,25 @@ data class ContactAccount(
     val type: String,
 )
 
+/**
+ * Оператор этого телефона в общей истории.
+ *
+ * @property id постоянный идентификатор вида `опер_37-A3F`: по нему строки,
+ *   которые вернулись из таблицы, отличаются от чужих.
+ * @property name ФИО из настроек; `null` — оператор себя не назвал.
+ */
+data class Operator(
+    val id: String,
+    val name: String?,
+) {
+    /** Подпись в таблице: ФИО, если введено, иначе техническое имя. */
+    val displayName: String
+        get() = name?.trim()?.takeIf { it.isNotEmpty() } ?: id
+}
+
 private val Context.settingsDataStore by preferencesDataStore(name = "settings")
 
-class SettingsRepository(private val context: Context) : ScheduleProvider {
+class SettingsRepository(private val context: Context) : ScheduleProvider, OperatorProvider {
 
     private object Keys {
         val START_MINUTE = intPreferencesKey("work_start_minute")
@@ -37,7 +57,11 @@ class SettingsRepository(private val context: Context) : ScheduleProvider {
         val ADDRESS_BASE_LAST_REFRESH = longPreferencesKey("address_base_last_refresh")
         val ADDRESS_BASE_DISTRICTS = stringSetPreferencesKey("address_base_districts")
         val SHEET_FETCH_COUNT = intPreferencesKey("sheet_fetch_count")
+        val OPERATOR_ID = stringPreferencesKey("operator_id")
+        val OPERATOR_NAME = stringPreferencesKey("operator_name")
     }
+
+    private val operatorMutex = Mutex()
 
     val schedule: Flow<WorkSchedule> = context.settingsDataStore.data.map { it.toSchedule() }
 
@@ -96,6 +120,65 @@ class SettingsRepository(private val context: Context) : ScheduleProvider {
                 prefs[Keys.ACCOUNT_TYPE] = account.type
             }
         }
+    }
+
+    /**
+     * Кто обрабатывает заказы на этом телефоне: постоянный идентификатор и
+     * ФИО, если оператор его ввёл.
+     */
+    override suspend fun operator(): Operator = Operator(id = operatorId(), name = operatorName())
+
+    /** Имя, отчество из настроек; `null` — не введено. */
+    suspend fun operatorName(): String? = context.settingsDataStore.data.first()[Keys.OPERATOR_NAME]
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+
+    suspend fun setOperatorName(name: String?) {
+        val text = name?.trim().orEmpty()
+        context.settingsDataStore.edit { prefs ->
+            if (text.isEmpty()) {
+                prefs.remove(Keys.OPERATOR_NAME)
+            } else {
+                prefs[Keys.OPERATOR_NAME] = text
+            }
+        }
+    }
+
+    /**
+     * Постоянный идентификатор телефона в общей истории: `опер_37-A3F`.
+     *
+     * Номер случайный двузначный, код — три символа из идентификатора
+     * устройства. Код и делает имя уникальным: два телефона с одинаковым
+     * номером всё равно различаются. Генерируется один раз и больше не
+     * меняется — иначе строки в таблице перестали бы считаться своими.
+     */
+    private suspend fun operatorId(): String = operatorMutex.withLock {
+        val stored = context.settingsDataStore.data.first()[Keys.OPERATOR_ID]
+        if (!stored.isNullOrBlank()) return@withLock stored
+
+        val generated = buildOperatorId()
+        context.settingsDataStore.edit { it[Keys.OPERATOR_ID] = generated }
+        generated
+    }
+
+    private fun buildOperatorId(): String {
+        val androidId = runCatching {
+            android.provider.Settings.Secure.getString(
+                context.contentResolver,
+                android.provider.Settings.Secure.ANDROID_ID,
+            )
+        }.getOrNull()
+
+        // Идентификатор устройства есть на всех версиях Android, но если
+        // прошивка его не отдала — хватит случайной строки: она всё равно
+        // сохранится навсегда.
+        val source = androidId?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
+        val code = (source.hashCode().toLong() and 0xFFFFFF)
+            .toString(16)
+            .uppercase()
+            .padStart(6, '0')
+            .takeLast(3)
+        return "опер_${Random.nextInt(10, 100)}-$code"
     }
 
     /** Когда базу адресов обновляли в последний раз. */

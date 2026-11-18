@@ -101,4 +101,7 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    // В JVM-тестах org.json из android.jar — заглушка; настоящая библиотека
+    // нужна, чтобы проверять разбор ответов скрипта.
+    testImplementation(libs.json)
 }

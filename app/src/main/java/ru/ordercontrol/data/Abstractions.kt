@@ -24,3 +24,8 @@ interface ContactLookup {
 interface AddressLookup {
     suspend fun find(address: String): AddressBaseEntry?
 }
+
+/** Кто обрабатывает заказы на этом телефоне: подпись в общей истории. */
+interface OperatorProvider {
+    suspend fun operator(): Operator
+}
