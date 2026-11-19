@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 import ru.ordercontrol.AppGraph
 import ru.ordercontrol.widget.WidgetRefresh
 
@@ -22,6 +23,11 @@ import ru.ordercontrol.widget.WidgetRefresh
  * убить процесс, и отложенная задача уже не выполнится. Обновления виджетов
  * и их отложенные повторы — тоже: виджеты сами не обновляются
  * (`updatePeriodMillis=0`).
+ *
+ * `goAsync()` можно вызвать **только один раз** на срабатывание:
+ * реализация отдаёт и обнуляет внутренний результат, повторный вызов
+ * возвращает `null`. Поэтому все отложенные работы одного `IDLE`
+ * запускаются под общий `pendingResult` в [holdAsync].
  *
  * Исходящие звонки не создают записей: журнал отдаёт только входящие,
  * пропущенные и сброшенные. Но по исходящим видно, что оператор перезвонил
@@ -61,83 +67,65 @@ class PhoneStateReceiver : BroadcastReceiver() {
             TelephonyManager.EXTRA_STATE_IDLE -> {
                 val outgoing = store.clearOutgoing()
                 val sessions = store.finish(subscriptionId)
-                if (sessions.isEmpty()) {
-                    // Повторный IDLE: звонок уже обработан.
-                    refreshAsync(context.applicationContext)
-                } else {
-                    finalizeAsync(context.applicationContext, sessions)
-                }
-                if (outgoing) {
-                    // Исходящий звонок закончился: он мог закрыть пропущенный
-                    // входящий звонок, на который клиент так и не ответил.
-                    checkOutgoingAsync(context.applicationContext)
+                holdAsync(context.applicationContext) {
+                    if (sessions.isEmpty()) {
+                        // Повторный IDLE: звонок уже обработан.
+                        WidgetRefresh.updateAll(context)
+                    } else {
+                        launch { finalizeSessions(context, sessions) }
+                    }
+                    if (outgoing) {
+                        // Исходящий звонок закончился: он мог закрыть пропущенный
+                        // входящий звонок, на который клиент так и не ответил.
+                        // Параллельно finalize: последовательно 6 с + 9 с
+                        // не влезут в десятисекундный лимит ресивера.
+                        launch {
+                            delay(OUTGOING_CATCH_UP_MS)
+                            WidgetRefresh.updateAll(context)
+                        }
+                    }
                 }
             }
         }
     }
 
-    private fun finalizeAsync(context: Context, sessions: List<CallSession>) {
+    /**
+     * Сверяет закончившиеся звонки с журналом и базой, затем дважды
+     * обновляет виджеты: сразу и с повтором через несколько секунд —
+     * к повтору журнал уже догнал звонок, и добранный по нему номер
+     * попадает в запись.
+     */
+    private suspend fun finalizeSessions(context: Context, sessions: List<CallSession>) {
+        try {
+            val finalizer = CallFinalizer(
+                calls = AppGraph.calls,
+                callLog = CallLogReader(context),
+            )
+            sessions.forEach { finalizer.resolve(it) }
+        } catch (e: Exception) {
+            // Сбой журнала или базы не должен ронять приложение,
+            // но и молча терять звонок нельзя: пишем причину в лог.
+            Log.e(TAG, "Не удалось создать запись о звонке", e)
+        }
+
+        WidgetRefresh.updateAll(context)
+        delay(CALL_LOG_CATCH_UP_MS)
+        WidgetRefresh.updateAll(context)
+    }
+
+    /**
+     * Держит broadcast (`goAsync`), пока не завершится [block] и все
+     * запущенные им корутины: после `finish()` процесс могут убить, а
+     * отложенные обновления виджетов уже не выполнятся — виджеты сами
+     * не обновляются (`updatePeriodMillis=0`). Дочерние корутины не
+     * зависят друг от друга: сбой одной не отменяет остальные.
+     */
+    private fun holdAsync(context: Context, block: suspend CoroutineScope.() -> Unit) {
         val pendingResult = goAsync()
 
         receiverScope.launch {
             try {
-                try {
-                    val finalizer = CallFinalizer(
-                        calls = AppGraph.calls,
-                        callLog = CallLogReader(context),
-                    )
-                    sessions.forEach { finalizer.resolve(it) }
-                } catch (e: Exception) {
-                    // Сбой журнала или базы не должен ронять приложение,
-                    // но и молча терять звонок нельзя: пишем причину в лог.
-                    Log.e(TAG, "Не удалось создать запись о звонке", e)
-                }
-
-                // Сразу после звонка журнал часто ещё не обновлён. Первое
-                // обновление виджетов заодно пробует добрать номер, а повторное
-                // через несколько секунд — когда журнал уже догнал звонок.
-                // Всё это до pendingResult.finish(): после него процесс могут
-                // убить, а виджеты сами не обновляются (updatePeriodMillis=0).
-                WidgetRefresh.updateAll(context)
-                delay(CALL_LOG_CATCH_UP_MS)
-                WidgetRefresh.updateAll(context)
-            } finally {
-                pendingResult.finish()
-            }
-        }
-    }
-
-    /**
-     * Обновление виджетов без новой записи о звонке (повторный `IDLE`).
-     * Тоже под goAsync: работа должна завершиться до возможной смерти
-     * процесса, виджеты сами не обновляются.
-     */
-    private fun refreshAsync(context: Context) {
-        val pendingResult = goAsync()
-
-        backgroundScope.launch {
-            try {
-                WidgetRefresh.updateAll(context)
-            } finally {
-                pendingResult.finish()
-            }
-        }
-    }
-
-    /**
-     * После исходящего звонка журнал обновляется с задержкой: сразу после
-     * `IDLE` исходящего звонка в нём ещё нет. Через несколько секунд
-     * сверяем журнал — и снимаем «пропущен» у тех, кого оператор перезвонил.
-     * goAsync держит процесс всё ожидание: иначе отложенный повтор
-     * не выполнится после смерти процесса.
-     */
-    private fun checkOutgoingAsync(context: Context) {
-        val pendingResult = goAsync()
-
-        backgroundScope.launch {
-            try {
-                delay(OUTGOING_CATCH_UP_MS)
-                WidgetRefresh.updateAll(context)
+                supervisorScope(block)
             } finally {
                 pendingResult.finish()
             }
@@ -147,13 +135,16 @@ class PhoneStateReceiver : BroadcastReceiver() {
     private companion object {
         const val TAG = "PhoneStateReceiver"
         val receiverScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         const val EXTRA_SUBSCRIPTION = "subscription"
 
         /** Через сколько ещё раз проверить журнал после звонка. */
         const val CALL_LOG_CATCH_UP_MS = 6_000L
 
-        /** Через сколько после исходящего звонка искать его в журнале. */
-        const val OUTGOING_CATCH_UP_MS = 10_000L
+        /**
+         * Через сколько после исходящего звонка искать его в журнале.
+         * Лимит ресивера — 10 секунд, поэтому чуть меньше и всегда
+         * параллельно [finalizeSessions], а не после неё.
+         */
+        const val OUTGOING_CATCH_UP_MS = 9_000L
     }
 }
