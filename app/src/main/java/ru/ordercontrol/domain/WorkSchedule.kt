@@ -17,13 +17,14 @@ data class WorkSchedule(
     fun isWorkingAt(epochMillis: Long, zone: ZoneId = ZoneId.systemDefault()): Boolean {
         if (days.isEmpty()) return false
         val dateTime = Instant.ofEpochMilli(epochMillis).atZone(zone)
-        if (dateTime.dayOfWeek !in days) return false
         val minutes = dateTime.hour * 60 + dateTime.minute
         return if (startMinute <= endMinute) {
-            minutes in startMinute until endMinute
+            dateTime.dayOfWeek in days && minutes in startMinute until endMinute
         } else {
-            // Окно через полночь: 22:00–06:00.
-            minutes >= startMinute || minutes < endMinute
+            // Окно через полночь: вечер принадлежит текущему дню,
+            // утренний хвост — смене, начатой вчера.
+            (minutes >= startMinute && dateTime.dayOfWeek in days) ||
+                (minutes < endMinute && dateTime.minusDays(1).dayOfWeek in days)
         }
     }
 

@@ -56,9 +56,6 @@ class FakeCallRecordDao : CallRecordDao {
     override suspend fun previousOpenBefore(from: Long, before: Long): CallRecord? =
         openRecords().firstOrNull { it.incomingAt >= from && it.incomingAt < before }
 
-    override suspend fun unreadCount(): Long =
-        records.count { !it.isProcessed && !it.isSilent }.toLong()
-
     override suspend fun countByCallLogId(callLogId: Long): Long =
         records.count { it.callLogId == callLogId }.toLong()
 
@@ -134,7 +131,8 @@ class FakeCallRecordDao : CallRecordDao {
 
     override suspend fun openWithAddress(): List<CallRecord> =
         openRecords().filter {
-            it.addressText.isNotBlank() || !it.displayName.isNullOrBlank()
+            (it.addressText.isNotBlank() || !it.displayName.isNullOrBlank()) &&
+                !it.isSkipped && it.isAnswered != false
         }
 
     override suspend fun openWithoutCallLogId(): List<CallRecord> =
@@ -231,6 +229,8 @@ class FakeCallRecordDao : CallRecordDao {
     ): List<CallRecord> = records.filter { record ->
         record.isProcessed &&
             record.closeReason in reasons &&
+            !record.isSkipped &&
+            record.isAnswered != false &&
             !record.phoneNormalized.isNullOrEmpty() &&
             record.historySentAt == null &&
             (record.processedAt ?: 0L) >= since

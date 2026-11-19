@@ -41,7 +41,7 @@ sealed interface UpdateCheckResult {
  * `versionCode` (см. `doc/versions.md`). Сравнивается с `versionCode`
  * установленного приложения, а не с `versionName`.
  *
- * Скачивание умеет докачивать: недокачанный файл лежит в `cacheDir/updates`
+ * Скачивание умеет докачивать: недокачанный файл лежит в `filesDir/updates`
  * под именем `<apk>.part` и при следующей попытке запрос продолжается с
  * нужного места (`Range`/`If-Range`). Обрыв связи не отменяет загрузку:
  * запрос повторяется несколько раз с паузой, каждый раз продолжая с
@@ -81,7 +81,9 @@ class UpdateClient(
         onProgress: (Int) -> Unit,
         onStatus: (String) -> Unit = {},
     ): File = withContext(Dispatchers.IO) {
-        val dir = File(context.cacheDir, UPDATES_DIR).apply { mkdirs() }
+        // filesDir, а не cacheDir: систему просят «освободить место» и чистить
+        // кэш прямо до подтверждения установки — APK не должен исчезнуть.
+        val dir = File(context.filesDir, UPDATES_DIR).apply { mkdirs() }
         val apkName = info.apkName.substringAfterLast('/').substringAfterLast('\\')
         val target = File(dir, apkName)
         val part = File(dir, "$apkName.part")

@@ -352,5 +352,21 @@ class SheetOrderMatcherTest {
     @Test
     fun `row key format`() {
         assertEquals("Мирный:7:0", SheetOrderMatcher.rowKey("Мирный", row(7, "Мирный 1")))
+        assertEquals("Мирный:7:1", SheetOrderMatcher.rowKey("Мирный", 7, 1))
+    }
+
+    @Test
+    fun `digit house is not a prefix of a house with letter`() {
+        // «Артема 116» и «Артема 116а» — разные дома, даже если одно слово
+        // начинается с другого.
+        assertFalse(SheetOrderMatcher.isPartialCandidate("Артема 116", "Артема 116а-115"))
+        assertFalse(SheetOrderMatcher.isPartialCandidate("Артема 116а-115", "Артема 116"))
+        // Ровно тот же дом остаётся точным совпадением.
+        val result = match(
+            records = listOf(record(1, "Артема 116")),
+            rows = listOf(row(1, "Артема 116")),
+        )
+        assertEquals(1, result.exact.size)
+        assertTrue(result.ambiguous.isEmpty())
     }
 }

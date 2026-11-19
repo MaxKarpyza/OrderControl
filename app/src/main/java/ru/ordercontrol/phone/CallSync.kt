@@ -1,9 +1,25 @@
 package ru.ordercontrol.phone
 
 import android.content.Context
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import ru.ordercontrol.AppGraph
+import ru.ordercontrol.data.CallRepository
 import ru.ordercontrol.domain.CallbackCall
 import ru.ordercontrol.domain.PhoneNormalizer
+
+/**
+ * Процесс-широкий лок на запись звонков в базу.
+ *
+ * Виджеты, восстановление на старте и финализатор работают параллельно и
+ * читают одинаковые снапшоты базы: без лока один звонок журнала мог бы
+ * привязаться к двум записям. Захваты не вкладываются: под этим локом
+ * нельзя вызывать `CallSync.sync`, `CallSync.catchUp` и
+ * `CallFinalizer.resolve`.
+ */
+internal object CallWrites {
+    val mutex = Mutex()
+}
 
 /**
  * Догоняет системный журнал: привязывает `callLogId` к записям, созданным
@@ -15,9 +31,9 @@ import ru.ordercontrol.domain.PhoneNormalizer
  */
 object CallSync {
 
-    suspend fun sync(context: Context) {
+    suspend fun sync(context: Context) = CallWrites.mutex.withLock {
         val reader = CallLogReader(context)
-        if (!reader.hasPermission()) return
+        if (!reader.hasPermission()) return@withLock
 
         val taken = AppGraph.calls.usedCallLogIds().toMutableSet()
         fillMissingNumbers(reader, taken)
@@ -25,8 +41,8 @@ object CallSync {
         syncCallbacks(reader)
 
         val refs = AppGraph.calls.openCallRefs()
-        if (refs.isEmpty()) return
-        val existing = reader.existingIds(refs.map { it.callLogId }) ?: return
+        if (refs.isEmpty()) return@withLock
+        val existing = reader.existingIds(refs.map { it.callLogId }) ?: return@withLock
         AppGraph.calls.reconcileWithCallLog(existing)
     }
 
@@ -67,39 +83,57 @@ object CallSync {
      * stopped после установки). Читаем журнал за последний час и создаём
      * записи о входящих, которых нет в базе.
      *
+     * Записи последних [RECENT_CALL_MS] пропускаются: свежим звонком ещё
+     * владеет живой путь ресивера, и дубль не нужен.
+     *
      * @return сколько записей добавлено.
      */
-    suspend fun catchUp(context: Context, hours: Int = CATCH_UP_HOURS): Int {
-        val reader = CallLogReader(context)
+    suspend fun catchUp(context: Context, hours: Int = CATCH_UP_HOURS): Int =
+        catchUp(CallLogReader(context), hours)
+
+    /**
+     * Журнал и репозиторий — отдельными параметрами, чтобы логика
+     * проверялась тестами без Android (продовый граф им недоступен).
+     */
+    internal suspend fun catchUp(
+        reader: CallLogSource,
+        hours: Int = CATCH_UP_HOURS,
+        calls: CallRepository = AppGraph.calls,
+    ): Int {
         if (!reader.hasPermission()) return 0
+        return CallWrites.mutex.withLock {
+            val now = System.currentTimeMillis()
+            val since = now - hours * 60L * 60L * 1000L
+            val entries = reader.latestIncomingSince(since)
+            if (entries.isEmpty()) return@withLock 0
 
-        val since = System.currentTimeMillis() - hours * 60L * 60L * 1000L
-        val entries = reader.latestIncomingSince(since)
-        if (entries.isEmpty()) return 0
+            val known = calls.usedCallLogIds().toMutableSet()
+            var added = 0
+            // От старых к новым: так «раньше» и склейка видят правильный порядок.
+            for (entry in entries.sortedBy { it.date }) {
+                // Свежей записью владеет ресивер: его финализатор прямо
+                // сейчас создаёт запись по этому звонку.
+                if (entry.date > now - RECENT_CALL_MS) continue
+                if (entry.id in known) continue
 
-        val known = AppGraph.calls.usedCallLogIds().toMutableSet()
-        var added = 0
-        // От старых к новым: так «раньше» и склейка видят правильный порядок.
-        for (entry in entries.sortedBy { it.date }) {
-            if (entry.id in known) continue
+                val phone = PhoneNormalizer.normalize(entry.number)
+                if (phone != null && calls.hasRecordNear(phone, entry.date, MATCH_WINDOW_MS)) {
+                    // Запись об этом звонке уже есть, просто без callLogId.
+                    known += entry.id
+                    continue
+                }
 
-            val phone = PhoneNormalizer.normalize(entry.number)
-            if (phone != null && AppGraph.calls.hasRecordNear(phone, entry.date, MATCH_WINDOW_MS)) {
-                // Запись об этом звонке уже есть, просто без callLogId.
+                val id = calls.registerIncoming(
+                    numberRaw = entry.number,
+                    answered = entry.answered,
+                    incomingAt = entry.date,
+                    callLogId = entry.id,
+                )
+                if (id != null) added++
                 known += entry.id
-                continue
             }
-
-            val id = AppGraph.calls.registerIncoming(
-                numberRaw = entry.number,
-                answered = entry.answered,
-                incomingAt = entry.date,
-                callLogId = entry.id,
-            )
-            if (id != null) added++
-            known += entry.id
+            added
         }
-        return added
     }
 
     /**
@@ -155,6 +189,9 @@ object CallSync {
 
     /** Насколько близко по времени искать уже существующую запись. */
     private const val MATCH_WINDOW_MS = 2 * 60 * 1000L
+
+    /** Записи журнала новее не трогаем: ими ещё владеет живой путь ресивера. */
+    private const val RECENT_CALL_MS = 2 * 60 * 1000L
 
     /**
      * За сколько часов восстанавливать пропущенные звонки.

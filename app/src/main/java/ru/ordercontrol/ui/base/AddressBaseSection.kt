@@ -38,7 +38,10 @@ fun AddressBaseSection(modifier: Modifier = Modifier) {
     var lastRefresh by remember { mutableLongStateOf(0L) }
     var fetches by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(state.phase, state.addresses) {
+    // Перечитываем по счётчику обновлений, а не по фазе и количеству
+    // адресов: фоновое обновление без новых адресов их не меняет, а время
+    // последнего разбора обновляется.
+    LaunchedEffect(state.refreshCount) {
         lastRefresh = AppGraph.settings.addressBaseLastRefresh()
         fetches = AppGraph.settings.sheetFetchCount()
     }

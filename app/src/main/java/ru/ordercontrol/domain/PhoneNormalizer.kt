@@ -27,7 +27,9 @@ object PhoneNormalizer {
         val lower = trimmed.lowercase()
         if (HIDDEN_MARKERS.any { lower.contains(it) }) return null
 
-        val digits = digits(raw)
+        // «00» — префикс международной связи: срезаем до проверок длины,
+        // иначе «007…» не совпадает с «+7…».
+        val digits = digits(raw).removePrefix("00")
         if (digits.isEmpty()) return null
         if (digits.length < 10) return digits
 

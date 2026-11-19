@@ -1,12 +1,12 @@
 package ru.ordercontrol.data
 
-import java.time.LocalDate
 import java.time.ZoneId
 import ru.ordercontrol.data.db.CallRecord
 import ru.ordercontrol.data.db.CallRecordDao
 import ru.ordercontrol.domain.AddressNormalizer
 import ru.ordercontrol.domain.CloseReason
 import ru.ordercontrol.domain.DeliveryDay
+import ru.ordercontrol.domain.SheetOrderMatcher
 import ru.ordercontrol.domain.SheetTarget
 
 /** Сколько сделано и что делается прямо сейчас. */
@@ -94,17 +94,24 @@ internal suspend fun CallRecord.toSheetOrder(
 /**
  * Запись необработанных заказов в Google Таблицу.
  *
- * Порядок: отбираем заказы → отбрасываем те, которые приложение уже писало
- * вчера или сегодня → пишем пачками по вкладкам → перечитываем вкладки и
- * закрываем только подтверждённые адреса.
+ * Порядок: отбираем заказы → отбрасываем дубли (и те, что приложение уже
+ * писало вчера или сегодня, и повторы внутри одной партии) → пишем пачками
+ * по вкладкам → перечитываем вкладки и закрываем только подтверждённые
+ * адреса. Обрыв сети в середине не отменяет подтверждение уже записанного:
+ * иначе те же заказы ушли бы в таблицу второй раз.
  */
 class SheetWriteRepository(
     private val callDao: CallRecordDao,
     private val client: SheetWriteClient,
     private val sheets: SheetsClient,
-    private val addressBase: AddressBaseRepository,
-    private val history: HistorySyncRepository,
+    // В JVM-тестах базы адресов и истории нет: отправка подменяет швы ниже.
+    private val addressBase: AddressBaseRepository? = null,
+    private val history: HistorySyncRepository? = null,
     private val now: () -> Long = System::currentTimeMillis,
+    /** Швы для тестов: запись и перечитывание вкладки без настоящей сети. */
+    internal val writeTab: suspend (tab: String, orders: List<SheetWriteOrder>) -> SheetWriteResult =
+        { tab, orders -> client.write(tab, orders) },
+    internal val fetchTab: suspend (tab: String) -> SheetTab? = { sheets.fetchTabByName(it) },
 ) {
 
     suspend fun send(onProgress: (SheetWriteProgress) -> Unit): SheetWriteOutcome {
@@ -114,17 +121,26 @@ class SheetWriteRepository(
             !record.isSkipped && record.isAnswered != false && record.deliveryAddress.isNotBlank()
         }
 
-        val writtenBefore = previousAddresses()
-        val duplicates = eligible.filter {
-            AddressNormalizer.normalize(it.deliveryAddress) in writtenBefore
-        }
-        val pending = eligible.filter { record ->
-            duplicates.none { it.id == record.id }
+        // Дубль не пишем: либо приложение уже записывало этот адрес вчера
+        // или сегодня, либо он уже встречался выше в этой же партии.
+        val writtenBefore = callDao.writtenAddressesSinceYesterday()
+        val seen = mutableSetOf<String>()
+        val pending = mutableListOf<CallRecord>()
+        var duplicates = 0
+        for (record in eligible) {
+            val normalized = AddressNormalizer.normalize(record.deliveryAddress)
+            if (normalized in writtenBefore ||
+                (normalized.isNotEmpty() && !seen.add(normalized))
+            ) {
+                duplicates += 1
+                continue
+            }
+            pending.add(record)
         }
 
         val outcome = MutableOutcome(
             total = eligible.size,
-            duplicates = duplicates.size,
+            duplicates = duplicates,
             skipped = records.size - eligible.size,
         )
 
@@ -134,7 +150,7 @@ class SheetWriteRepository(
 
         // Заодно обмениваемся общей историей: таблицу в этот момент всё равно
         // пишем и скачиваем. Ошибка обмена не должна заслонять итог записи.
-        runCatching { history.sync() }
+        runCatching { history?.sync() }
 
         return outcome.toResult()
     }
@@ -154,10 +170,10 @@ class SheetWriteRepository(
 
         for ((tab, records) in byTab) {
             onProgress(SheetWriteProgress(done = done, total = pending.size, address = records.first().deliveryAddress))
-            val result = client.write(
-                tab = tab,
-                orders = records.map { record ->
-                    record.toSheetOrder { address -> addressBase.find(address)?.district }
+            val result = writeTab(
+                tab,
+                records.map { record ->
+                    record.toSheetOrder { address -> addressBase?.find(address)?.district }
                 },
             )
             done += records.size
@@ -179,6 +195,10 @@ class SheetWriteRepository(
 
                 SheetWriteResult.NoNetwork -> {
                     outcome.errors.add("нет сети")
+                    // Записанные до обрыва вкладки всё равно подтверждаем:
+                    // без этого их записи остались бы открытыми и ушли бы
+                    // в таблицу второй раз.
+                    confirmWritten(writtenByTab, outcome)
                     return
                 }
             }
@@ -198,7 +218,7 @@ class SheetWriteRepository(
     ) {
         var fetched = false
         for ((tab, records) in writtenByTab) {
-            val rows = sheets.fetchTabByName(tab)?.rows
+            val rows = fetchTab(tab)?.rows
             if (rows == null) {
                 outcome.errors.add("не удалось перечитать вкладку $tab")
                 outcome.notConfirmed.addAll(records.map { it.deliveryAddress })
@@ -221,7 +241,9 @@ class SheetWriteRepository(
                     id = record.id,
                     at = now(),
                     reason = CloseReason.SHEET,
-                    sheetKey = "$tab:${row.rowIndex}",
+                    // Ключ той же формы, что у проверки: иначе собственная
+                    // запись не блокирует свою строку при следующей сверке.
+                    sheetKey = SheetOrderMatcher.rowKey(tab, row.rowIndex, row.column),
                 )
                 if (closed > 0) {
                     outcome.confirmed += 1
@@ -232,21 +254,8 @@ class SheetWriteRepository(
         // Таблицу скачали: счётчик растёт, а на десятое скачивание
         // обновляется база адресов.
         if (fetched) {
-            addressBase.onTableFetched()
+            addressBase?.onTableFetched()
         }
-    }
-
-    /**
-     * Адреса, которые приложение писало в таблицу вчера и сегодня.
-     * Повтор по тому же адресу — почти наверняка дубль.
-     */
-    private suspend fun previousAddresses(): Set<String> {
-        val zone = ZoneId.systemDefault()
-        val from = LocalDate.now(zone).minusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
-        return callDao.writtenSince(from)
-            .map { AddressNormalizer.normalize(it.deliveryAddress) }
-            .filter { it.isNotEmpty() }
-            .toSet()
     }
 
     private class MutableOutcome(

@@ -32,6 +32,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,21 +61,31 @@ private val ALL_DAYS = listOf(
     DayOfWeek.SUNDAY,
 )
 
+/** Дни недели переживают поворот списком имён: Set — не Bundle-тип. */
+private val DaysSaver = listSaver<Set<DayOfWeek>, String>(
+    save = { days -> days.map { it.name } },
+    restore = { names -> names.mapNotNull { name -> runCatching { DayOfWeek.valueOf(name) }.getOrNull() }.toSet() },
+)
+
 @Composable
 fun SettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var startMinute by remember { mutableIntStateOf(WorkSchedule.DEFAULT_START_MINUTE) }
-    var endMinute by remember { mutableIntStateOf(WorkSchedule.DEFAULT_END_MINUTE) }
-    var days by remember { mutableStateOf(WorkSchedule.DEFAULT_DAYS) }
+    // Несохранённые правки переживают поворот и пересоздание активности.
+    var startMinute by rememberSaveable { mutableIntStateOf(WorkSchedule.DEFAULT_START_MINUTE) }
+    var endMinute by rememberSaveable { mutableIntStateOf(WorkSchedule.DEFAULT_END_MINUTE) }
+    var days by rememberSaveable(stateSaver = DaysSaver) { mutableStateOf(WorkSchedule.DEFAULT_DAYS) }
     var error by remember { mutableStateOf<String?>(null) }
-    var loaded by remember { mutableStateOf(false) }
-    var operatorId by remember { mutableStateOf("") }
-    var operatorName by remember { mutableStateOf("") }
+    var loaded by rememberSaveable { mutableStateOf(false) }
+    var operatorId by rememberSaveable { mutableStateOf("") }
+    var operatorName by rememberSaveable { mutableStateOf("") }
     val invalidDaysMessage = stringResource(R.string.settings_invalid)
 
     LaunchedEffect(Unit) {
+        // После поворота состояние восстановлено: перечитывание сохранённых
+        // значений затёрло бы несохранённые правки.
+        if (loaded) return@LaunchedEffect
         val schedule = AppGraph.settings.currentSchedule()
         startMinute = schedule.startMinute
         endMinute = schedule.endMinute

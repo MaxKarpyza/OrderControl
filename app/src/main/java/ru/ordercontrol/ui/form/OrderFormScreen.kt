@@ -52,9 +52,7 @@ import ru.ordercontrol.domain.BlacklistKind
 import ru.ordercontrol.domain.DeliveryDay
 import ru.ordercontrol.ui.CallStatusBadge
 import ru.ordercontrol.ui.DisplayFormat
-import ru.ordercontrol.ui.order.DistrictField
-import ru.ordercontrol.ui.order.OrderAddressField
-import ru.ordercontrol.ui.order.OrderDeliveryHint
+import ru.ordercontrol.ui.order.OrderFields
 
 @Composable
 fun OrderFormScreen(recordId: Long, onClose: () -> Unit) {
@@ -207,60 +205,26 @@ private fun FormContent(
 
             // Поля те же, что и при ручном вводе: адрес с подсказками из базы
             // адресов, количество, район, день доставки и комментарий.
-            OrderAddressField(
-                value = state.address,
+            OrderFields(
+                address = state.address,
+                onAddressChange = onAddressChange,
                 suggestions = state.suggestions,
-                onValueChange = onAddressChange,
-                onSelect = onSuggestionSelect,
-                supportingText = if (state.knownName != null && state.address.isBlank()) {
+                onSuggestionSelect = onSuggestionSelect,
+                bottles = state.bottles,
+                onBottlesChange = onBottlesChange,
+                district = state.district,
+                districts = state.districts,
+                onDistrictSelect = onDistrictChange,
+                deliveryDay = state.deliveryDay,
+                onDeliveryDaySelect = onDeliveryDayChange,
+                comment = state.comment,
+                onCommentChange = onCommentChange,
+                at = record.incomingAt,
+                addressSupportingText = if (state.knownName != null && state.address.isBlank()) {
                     { Text(stringResource(R.string.form_address_from_contact, state.knownName)) }
                 } else {
                     null
                 },
-            )
-
-            QuickBottles(
-                selected = state.bottles.trim(),
-                onSelect = onBottlesChange,
-            )
-
-            OutlinedTextField(
-                value = state.bottles,
-                onValueChange = onBottlesChange,
-                label = { Text(stringResource(R.string.form_bottles)) },
-                placeholder = { Text(stringResource(R.string.form_bottles_hint)) },
-                singleLine = true,
-                // Без автозамены у клавиатуры нет полосы подсказок: её высота
-                // не меняется после привязки и не дёргает форму.
-                keyboardOptions = KeyboardOptions(autoCorrectEnabled = false),
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            DistrictField(
-                value = state.district,
-                districts = state.districts,
-                onSelect = onDistrictChange,
-            )
-
-            DeliveryDayPicker(
-                options = DeliveryDay.optionsAt(record.incomingAt),
-                selected = state.deliveryDay,
-                onSelect = onDeliveryDayChange,
-            )
-
-            OrderDeliveryHint(
-                day = state.deliveryDay,
-                at = record.incomingAt,
-            )
-
-            OutlinedTextField(
-                value = state.comment,
-                onValueChange = onCommentChange,
-                label = { Text(stringResource(R.string.form_comment)) },
-                placeholder = { Text(stringResource(R.string.form_comment_hint)) },
-                minLines = 1,
-                keyboardOptions = KeyboardOptions(autoCorrectEnabled = false),
-                modifier = Modifier.fillMaxWidth(),
             )
 
             if (record.phoneNormalized != null) {

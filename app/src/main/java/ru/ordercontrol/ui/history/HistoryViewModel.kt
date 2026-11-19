@@ -48,22 +48,12 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
         get() = others.isNotEmpty()
 
     /** Все строки с учётом переключателя «Мои / Все». */
-    val items: List<HistoryItem>
-        get() = buildList {
-            mine.forEach { add(HistoryItem.Mine(it)) }
-            if (!onlyMine) others.forEach { add(HistoryItem.Other(it)) }
-        }.sortedByDescending { it.processedAt }
+    var items by mutableStateOf<List<HistoryItem>>(emptyList())
+        private set
 
     /** Записи, подходящие под текущий запрос. */
-    val visibleItems: List<HistoryItem>
-        get() = items.filter { item ->
-            HistorySearch.matches(
-                displayName = item.searchName,
-                address = item.address,
-                phone = item.phone,
-                query = query,
-            )
-        }
+    var visibleItems by mutableStateOf<List<HistoryItem>>(emptyList())
+        private set
 
     init {
         viewModelScope.launch {
@@ -76,6 +66,7 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
                         this@HistoryViewModel.mine = mine
                         this@HistoryViewModel.others = others
                         loading = false
+                        rebuild()
                     }
             } catch (_: Exception) {
                 loading = false
@@ -83,16 +74,35 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    /** Пересобирает список и фильтр: вызывается при смене данных, запроса или переключателя. */
+    private fun rebuild() {
+        items = buildList {
+            mine.forEach { add(HistoryItem.Mine(it)) }
+            if (!onlyMine) others.forEach { add(HistoryItem.Other(it)) }
+        }.sortedByDescending { it.processedAt }
+        visibleItems = items.filter { item ->
+            HistorySearch.matches(
+                displayName = item.searchName,
+                address = item.address,
+                phone = item.phone,
+                query = query,
+            )
+        }
+    }
+
     fun updateQuery(value: String) {
         query = value
+        rebuild()
     }
 
     fun clearQuery() {
         query = ""
+        rebuild()
     }
 
     fun showOnlyMine(value: Boolean) {
         onlyMine = value
+        rebuild()
     }
 
     /** Возвращает обработанную запись в список необработанных. */

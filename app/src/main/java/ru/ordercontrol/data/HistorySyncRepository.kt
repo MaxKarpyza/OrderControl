@@ -46,7 +46,7 @@ class HistorySyncRepository(
         val since = syncedAt - RETENTION_MS
         val operator = operators.operator()
 
-        val pending = callDao.unsentToHistory(reasons = HISTORY_REASONS, since = since)
+        val pending = callDao.unsentToHistory(reasons = CloseReason.HISTORY_REASONS, since = since)
         val byPushedId = pending.associateBy { record ->
             pushId(operator.id, record.id, record.processedAt ?: record.incomingAt)
         }
@@ -93,8 +93,6 @@ class HistorySyncRepository(
         const val RETENTION_DAYS = 2
 
         val RETENTION_MS: Long = RETENTION_DAYS * 24 * 60 * 60 * 1000L
-
-        private val HISTORY_REASONS = listOf(CloseReason.DONE, CloseReason.SHEET)
 
         /**
          * Идентификатор строки в таблице.

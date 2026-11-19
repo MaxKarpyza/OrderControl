@@ -9,8 +9,9 @@ package ru.ordercontrol.domain
  */
 object AddressNormalizer {
 
-    // \p{L} в java.util.regex не покрывает кириллицу — буквы заданы диапазонами явно.
-    private val NON_WORD = Regex("[^a-zа-я0-9]+")
+    // Буквы заданы диапазонами явно: весь блок кириллицы U+0400–U+04FF,
+    // чтобы украинские і, ї, є, ґ не становились разделителями.
+    private val NON_WORD = Regex("[^a-z\u0400-\u04FF0-9]+")
     private val NUMBER = Regex("\\d+")
 
     /**
@@ -32,6 +33,15 @@ object AddressNormalizer {
     fun normalize(raw: String): String =
         raw.lowercase()
             .replace('ё', 'е')
+            // Латинские омоглифы от неправильной раскладки — в кириллицу,
+            // чтобы «Кемерoвская» (с латинской o) совпадала точно.
+            .replace('o', 'о')
+            .replace('e', 'е')
+            .replace('a', 'а')
+            .replace('c', 'с')
+            .replace('p', 'р')
+            .replace('x', 'х')
+            .replace('y', 'у')
             .replace(NON_WORD, " ")
             .split(' ')
             .filter { it.isNotEmpty() && it !in NOISE_WORDS }

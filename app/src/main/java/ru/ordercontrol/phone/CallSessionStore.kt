@@ -12,15 +12,52 @@ data class CallSession(
 )
 
 /**
+ * Минимальный шов хранения: логика [CallSessionStore] остаётся чистым Kotlin
+ * и тестируется без Android. Значение `null` в [apply] означает удаление ключа.
+ */
+internal interface SessionStorage {
+
+    /** Текущее содержимое хранилища: ключ → строка. */
+    fun load(): Map<String, String>
+
+    /** Атомарно применяет изменения. */
+    fun apply(changed: Map<String, String?>)
+}
+
+/** Android-реализация [SessionStorage] поверх SharedPreferences. */
+internal class PrefsSessionStorage(context: Context) : SessionStorage {
+
+    private val prefs = context.applicationContext
+        .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    override fun load(): Map<String, String> =
+        prefs.all.mapNotNull { (key, value) -> (value as? String)?.let { key to it } }.toMap()
+
+    override fun apply(changed: Map<String, String?>) {
+        prefs.edit(commit = true) {
+            changed.forEach { (key, value) ->
+                if (value == null) remove(key) else putString(key, value)
+            }
+        }
+    }
+
+    private companion object {
+        const val PREFS_NAME = "call_sessions"
+    }
+}
+
+/**
  * Состояние текущих звонков, переживающее пересоздание процесса ресивера.
  *
  * Сессии хранятся по `subscriptionId`, чтобы звонок на второй SIM не сбрасывал
  * состояние разговора на первой.
+ *
+ * @param now источник текущего времени, подменяется в тестах.
  */
-class CallSessionStore(context: Context) {
-
-    private val prefs = context.applicationContext
-        .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+internal class CallSessionStore(
+    private val storage: SessionStorage,
+    private val now: () -> Long = System::currentTimeMillis,
+) {
 
     /**
      * Начало входящего звонка.
@@ -44,30 +81,33 @@ class CallSessionStore(context: Context) {
             )
         }
 
-        prefs.edit(commit = true) {
-            putString(key(subscriptionId), encode(session))
-        }
+        storage.apply(mapOf(key(subscriptionId) to encode(session)))
     }
 
     /**
      * Разговор начался.
      *
-     * @return `true`, если на этой SIM был входящий звонок. `false` значит,
-     *         что звонок исходящий: у входящего есть `RINGING`, у исходящего
-     *         только `OFFHOOK`.
+     * Прошивка присылает `subscription` не во всех событиях: если ни одна
+     * сессия не совпала по номеру SIM, берём самую свежую — иначе отвеченный
+     * входящий был бы помечен как исходящий и попал бы в «пропущенные».
+     *
+     * @return `true`, если был входящий звонок. `false` значит, что звонок
+     *         исходящий: у входящего есть `RINGING`, у исходящего только
+     *         `OFFHOOK`.
      */
     fun markAnswered(subscriptionId: Int): Boolean {
         val sessions = active()
         if (sessions.isEmpty()) return false
-        val target = if (subscriptionId >= 0) {
+        val matched = if (subscriptionId >= 0) {
             sessions.firstOrNull { it.subscriptionId == subscriptionId }
         } else {
-            sessions.maxByOrNull { it.startedAt }
-        } ?: return false
+            null
+        }
+        val target = matched ?: sessions.maxByOrNull { it.startedAt } ?: return false
         if (!target.answered) {
-            prefs.edit(commit = true) {
-                putString(key(target.subscriptionId), encode(target.copy(answered = true)))
-            }
+            storage.apply(
+                mapOf(key(target.subscriptionId) to encode(target.copy(answered = true)))
+            )
         }
         return true
     }
@@ -80,7 +120,7 @@ class CallSessionStore(context: Context) {
      * «пропущен» у перезвонившего клиента.
      */
     fun markOutgoing() {
-        prefs.edit(commit = true) { putBoolean(KEY_OUTGOING, true) }
+        storage.apply(mapOf(KEY_OUTGOING to OUTGOING_VALUE))
     }
 
     /**
@@ -89,40 +129,55 @@ class CallSessionStore(context: Context) {
      * @return `true`, если исходящий звонок действительно был.
      */
     fun clearOutgoing(): Boolean {
-        if (!prefs.getBoolean(KEY_OUTGOING, false)) return false
-        prefs.edit(commit = true) { remove(KEY_OUTGOING) }
+        if (storage.load()[KEY_OUTGOING] != OUTGOING_VALUE) return false
+        storage.apply(mapOf(KEY_OUTGOING to null))
         return true
     }
 
-    fun active(): List<CallSession> = prefs.all.keys
-        .filter { it.startsWith(KEY_PREFIX) }
-        .mapNotNull { key -> prefs.getString(key, null)?.let(::decode) }
+    fun active(): List<CallSession> {
+        val nowMs = now()
+        val sessions = storage.load()
+            .filterKeys { it.startsWith(KEY_PREFIX) }
+            .mapNotNull { (key, raw) -> decode(raw)?.let { key to it } }
+        // Ребут в разгар звонка оставляет фантомную сессию: старше
+        // MAX_SESSION_MS она к текущему звонку отношения не имеет —
+        // игнорируем и удаляем.
+        val (live, expired) = sessions.partition { (_, session) ->
+            nowMs - session.startedAt <= MAX_SESSION_MS
+        }
+        if (expired.isNotEmpty()) {
+            storage.apply(expired.associate { (key, _) -> key to null })
+        }
+        return live.map { it.second }
+    }
 
     /**
      * Забирает и удаляет сессии указанной SIM; `-1` — все активные.
      *
-     * Номер SIM в `RINGING` и `IDLE` приходит не всегда, поэтому если по
-     * указанной SIM ничего нет, возвращаются все активные сессии: иначе
-     * звонок потерялся бы из-за несовпадения идентификаторов.
+     * Номер SIM приходит не во всех событиях. Поэтому при `subscriptionId >= 0`
+     * без точного совпадения фолбэк берёт только сессии с неизвестной SIM:
+     * чужой живой звонок под другой известной SIM (call waiting на второй
+     * SIM) финализировать нельзя.
      */
     fun finish(subscriptionId: Int): List<CallSession> {
         val all = active()
-        val bySubscription = if (subscriptionId >= 0) {
-            all.filter { it.subscriptionId == subscriptionId }
+        val target = if (subscriptionId < 0) {
+            all
         } else {
-            emptyList()
+            all.filter { it.subscriptionId == subscriptionId }.ifEmpty {
+                all.filter { it.subscriptionId == UNKNOWN_SUBSCRIPTION }
+            }
         }
-        val target = bySubscription.ifEmpty { all }
         if (target.isEmpty()) return emptyList()
 
-        prefs.edit(commit = true) {
-            target.forEach { remove(key(it.subscriptionId)) }
-        }
+        storage.apply(target.associate { key(it.subscriptionId) to null })
         return target
     }
 
     private fun read(subscriptionId: Int): CallSession? =
-        prefs.getString(key(subscriptionId), null)?.let(::decode)
+        storage.load()[key(subscriptionId)]?.let(::decode)
+            // Устаревшую сессию считаем отсутствующей: новый звонок её затрёт.
+            ?.takeIf { now() - it.startedAt <= MAX_SESSION_MS }
 
     private fun key(subscriptionId: Int): String = "$KEY_PREFIX$subscriptionId"
 
@@ -146,10 +201,16 @@ class CallSessionStore(context: Context) {
         )
     }
 
-    private companion object {
-        const val PREFS_NAME = "call_sessions"
+    internal companion object {
         const val KEY_PREFIX = "session_"
         const val KEY_OUTGOING = "outgoing_active"
+        const val OUTGOING_VALUE = "1"
         const val SEPARATOR = "\u001F"
+
+        /** Номер SIM не пришёл в extra `subscription`. */
+        const val UNKNOWN_SUBSCRIPTION = -1
+
+        /** Срок жизни сессии: фантом после ребута не переживает звонок. */
+        const val MAX_SESSION_MS = 10 * 60 * 1000L
     }
 }

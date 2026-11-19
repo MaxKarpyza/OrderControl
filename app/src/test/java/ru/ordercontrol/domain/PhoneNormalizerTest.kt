@@ -78,4 +78,10 @@ class PhoneNormalizerTest {
     fun `already normalized number stays the same`() {
         assertEquals("+79991234567", PhoneNormalizer.normalize("+79991234567"))
     }
+
+    @Test
+    fun `double zero prefix becomes plus seven`() {
+        assertEquals("+79991234567", PhoneNormalizer.normalize("+0079991234567"))
+        assertEquals("+79991234567", PhoneNormalizer.normalize("0079991234567"))
+    }
 }

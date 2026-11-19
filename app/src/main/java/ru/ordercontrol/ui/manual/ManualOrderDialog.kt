@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -17,7 +16,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,12 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import ru.ordercontrol.R
-import ru.ordercontrol.domain.DeliveryDay
-import ru.ordercontrol.ui.form.DeliveryDayPicker
-import ru.ordercontrol.ui.form.QuickBottles
-import ru.ordercontrol.ui.order.DistrictField
-import ru.ordercontrol.ui.order.OrderAddressField
-import ru.ordercontrol.ui.order.OrderDeliveryHint
+import ru.ordercontrol.ui.order.OrderFields
 
 /**
  * Карточка ручного ввода заказа: адрес с подсказками из базы адресов,
@@ -100,53 +93,23 @@ fun ManualOrderDialog(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    OrderAddressField(
-                        value = state.address,
+                    // Время ручного заказа — момент ввода: от него отсчитываются
+                    // варианты дня доставки.
+                    OrderFields(
+                        address = state.address,
+                        onAddressChange = viewModel::updateAddress,
                         suggestions = state.suggestions,
-                        onValueChange = viewModel::updateAddress,
-                        onSelect = viewModel::selectSuggestion,
-                    )
-
-                    QuickBottles(
-                        selected = state.bottles.trim(),
-                        onSelect = viewModel::updateBottles,
-                    )
-
-                    OutlinedTextField(
-                        value = state.bottles,
-                        onValueChange = viewModel::updateBottles,
-                        label = { Text(stringResource(R.string.form_bottles)) },
-                        placeholder = { Text(stringResource(R.string.form_bottles_hint)) },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(autoCorrectEnabled = false),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-
-                    DistrictField(
-                        value = state.district,
+                        onSuggestionSelect = viewModel::selectSuggestion,
+                        bottles = state.bottles,
+                        onBottlesChange = viewModel::updateBottles,
+                        district = state.district,
                         districts = state.districts,
-                        onSelect = viewModel::updateDistrict,
-                    )
-
-                    DeliveryDayPicker(
-                        options = DeliveryDay.optionsAt(System.currentTimeMillis()),
-                        selected = state.deliveryDay,
-                        onSelect = viewModel::setDeliveryDay,
-                    )
-
-                    OrderDeliveryHint(
-                        day = state.deliveryDay,
+                        onDistrictSelect = viewModel::updateDistrict,
+                        deliveryDay = state.deliveryDay,
+                        onDeliveryDaySelect = viewModel::setDeliveryDay,
+                        comment = state.comment,
+                        onCommentChange = viewModel::updateComment,
                         at = System.currentTimeMillis(),
-                    )
-
-                    OutlinedTextField(
-                        value = state.comment,
-                        onValueChange = viewModel::updateComment,
-                        label = { Text(stringResource(R.string.form_comment)) },
-                        placeholder = { Text(stringResource(R.string.form_comment_hint)) },
-                        minLines = 1,
-                        keyboardOptions = KeyboardOptions(autoCorrectEnabled = false),
-                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
 

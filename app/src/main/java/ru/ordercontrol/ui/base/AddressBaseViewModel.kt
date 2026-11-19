@@ -29,6 +29,8 @@ data class AddressBaseUiState(
     /** База ещё пуста: без неё подсказок нет. */
     val empty: Boolean = true,
     val error: String? = null,
+    /** Сколько раз база успешно обновилась: метка времени живёт по нему. */
+    val refreshCount: Int = 0,
 )
 
 /**
@@ -155,6 +157,7 @@ class AddressBaseViewModel(application: Application) : AndroidViewModel(applicat
                     addresses = result.addresses,
                     empty = result.addresses == 0,
                     error = null,
+                    refreshCount = state.refreshCount + 1,
                 )
                 if (result.failedTabs > 0) {
                     Log.w(TAG, "Не разобраны вкладки: ${result.failedTabs}")

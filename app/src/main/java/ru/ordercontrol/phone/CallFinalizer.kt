@@ -1,5 +1,6 @@
 package ru.ordercontrol.phone
 
+import kotlinx.coroutines.sync.withLock
 import ru.ordercontrol.data.CallRepository
 import ru.ordercontrol.domain.PhoneNormalizer
 
@@ -23,11 +24,14 @@ class CallFinalizer(
      * Номер берётся из `PHONE_STATE`, а при его отсутствии — из журнала,
      * если журнал уже содержит этот звонок. В любом случае запись создаётся
      * сразу: оператор открывает форму через секунду после звонка.
+     *
+     * Тело выполняется под процесс-широким локом [CallWrites]: иначе
+     * восстановление на холодном старте задваивало бы эту запись.
      */
-    suspend fun resolve(session: CallSession): Long? {
+    suspend fun resolve(session: CallSession): Long? = CallWrites.mutex.withLock {
         val sessionNumber = PhoneNormalizer.normalize(session.number)
         if (sessionNumber != null) {
-            return calls.registerIncoming(
+            return@withLock calls.registerIncoming(
                 numberRaw = session.number,
                 answered = session.answered,
                 incomingAt = session.startedAt,
@@ -39,7 +43,7 @@ class CallFinalizer(
         if (callLog.hasPermission()) {
             val entry = findEntry(session)?.takeIf { !calls.isCallLogIdKnown(it.id) }
             if (entry != null) {
-                return calls.registerIncoming(
+                return@withLock calls.registerIncoming(
                     numberRaw = entry.number,
                     answered = entry.answered,
                     incomingAt = entry.date,
@@ -51,7 +55,7 @@ class CallFinalizer(
         // Журнал ещё не обновился: запись создаётся сразу, номер появится
         // при следующей сверке. Если номер так и не найдётся, запись
         // останется со пометкой «скрытый номер».
-        return calls.registerIncoming(
+        calls.registerIncoming(
             numberRaw = null,
             answered = session.answered,
             incomingAt = session.startedAt,
@@ -60,25 +64,19 @@ class CallFinalizer(
     }
 
     /**
-     * Запись журнала, относящаяся к этому звонку.
+     * Запись журнала для звонка с пустым номером в `PHONE_STATE`.
      *
-     * Если номер из `PHONE_STATE` известен, ищем по номеру. Если нет — берём
-     * звонок, ближайший по времени к началу сессии: пустой номер в
-     * `PHONE_STATE` обычно означает, что прошивка его не отдала, а не то,
-     * что номер скрыт. Ближайший, а не самый свежий: в журнале могут быть
-     * звонки с другим временем из-за перевода часов.
+     * Пустой номер обычно означает, что прошивка его не отдала, а не то,
+     * что номер скрыт. Берём звонок, ближайший по времени к началу сессии,
+     * а не самый свежий: в журнале могут быть звонки с другим временем
+     * из-за перевода часов.
      */
     fun findEntry(session: CallSession): CallLogEntry? {
         val since = session.startedAt - CLOCK_SKEW_MS
         val until = session.startedAt + MATCH_WINDOW_MS
-        val entries = callLog.latestIncomingSince(since).filter { it.date in since..until }
-        if (entries.isEmpty()) return null
-
-        val sessionNumber = PhoneNormalizer.normalize(session.number)
-        if (sessionNumber != null) {
-            return entries.firstOrNull { PhoneNormalizer.normalize(it.number) == sessionNumber }
-        }
-        return entries.minByOrNull { kotlin.math.abs(it.date - session.startedAt) }
+        return callLog.latestIncomingSince(since)
+            .filter { it.date in since..until }
+            .minByOrNull { kotlin.math.abs(it.date - session.startedAt) }
     }
 
     private companion object {

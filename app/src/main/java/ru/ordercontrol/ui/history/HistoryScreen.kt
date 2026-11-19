@@ -1,7 +1,5 @@
 package ru.ordercontrol.ui.history
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,7 +14,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
@@ -39,7 +36,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.ordercontrol.R
@@ -47,7 +43,9 @@ import ru.ordercontrol.data.db.CallRecord
 import ru.ordercontrol.data.db.SharedHistoryEntry
 import ru.ordercontrol.ui.DisplayFormat
 import ru.ordercontrol.ui.InfoLine
+import ru.ordercontrol.ui.RecordCardBody
 import ru.ordercontrol.ui.RecordCardShell
+import ru.ordercontrol.ui.dial
 
 /**
  * Обработанные заявки: свои и чужие (общая история операторов), поиск по
@@ -220,16 +218,7 @@ private fun HistoryCard(record: CallRecord, onRestore: () -> Unit) {
         record = record,
         highlightDelivery = false,
         showDeliveryBadge = false,
-        headerAction = record.phoneNormalized?.let { phone ->
-            {
-                IconButton(onClick = { context.dial(phone) }) {
-                    Icon(
-                        imageVector = Icons.Default.Phone,
-                        contentDescription = stringResource(R.string.action_call),
-                    )
-                }
-            }
-        },
+        onDial = record.phoneNormalized?.let { phone -> { context.dial(phone) } },
     ) {
         InfoLine(
             label = stringResource(R.string.history_call_time),
@@ -257,7 +246,6 @@ private fun HistoryCard(record: CallRecord, onRestore: () -> Unit) {
 @Composable
 private fun SharedHistoryCard(entry: SharedHistoryEntry) {
     val context = LocalContext.current
-    val addressInTitle = entry.address.isNotBlank()
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -271,67 +259,28 @@ private fun SharedHistoryCard(entry: SharedHistoryEntry) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = if (addressInTitle) {
-                        entry.address
-                    } else {
-                        DisplayFormat.phone(entry.phone)
-                    },
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.weight(1f),
-                )
-                IconButton(onClick = { context.dial(entry.phone) }) {
-                    Icon(
-                        imageVector = Icons.Default.Phone,
-                        contentDescription = stringResource(R.string.action_call),
-                    )
-                }
-            }
-
-            InfoLine(
-                label = stringResource(R.string.main_phone),
-                value = DisplayFormat.phone(entry.phone),
-            )
-            if (entry.bottles.isNotBlank()) {
+            RecordCardBody(
+                title = entry.address.ifBlank { DisplayFormat.phone(entry.phone) },
+                phone = DisplayFormat.phone(entry.phone),
+                bottles = entry.bottles,
+                address = entry.address,
+                district = entry.district,
+                onDial = { context.dial(entry.phone) },
+                addressInTitle = entry.address.isNotBlank(),
+                comment = entry.comment,
+                hideEmptyLines = true,
+            ) {
                 InfoLine(
-                    label = stringResource(R.string.main_bottles),
-                    value = entry.bottles,
+                    label = stringResource(R.string.history_author),
+                    value = entry.author,
                 )
-            }
-            if (!addressInTitle) {
                 InfoLine(
-                    label = stringResource(R.string.main_address),
-                    value = entry.address.ifBlank { stringResource(R.string.main_not_filled) },
+                    label = stringResource(R.string.history_processed_time),
+                    value = DisplayFormat.fullDateTime(entry.processedAt),
                 )
             }
-            entry.district?.takeIf { it.isNotBlank() }?.let { district ->
-                InfoLine(
-                    label = stringResource(R.string.main_district),
-                    value = district,
-                )
-            }
-            entry.comment.takeIf { it.isNotBlank() }?.let { comment ->
-                InfoLine(
-                    label = stringResource(R.string.form_comment),
-                    value = comment,
-                )
-            }
-            InfoLine(
-                label = stringResource(R.string.history_author),
-                value = entry.author,
-            )
-            InfoLine(
-                label = stringResource(R.string.history_processed_time),
-                value = DisplayFormat.fullDateTime(entry.processedAt),
-            )
         }
     }
-}
-
-private fun android.content.Context.dial(phone: String) {
-    startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone")))
 }
 
 @Composable

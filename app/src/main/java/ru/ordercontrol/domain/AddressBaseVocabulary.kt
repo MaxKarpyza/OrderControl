@@ -31,7 +31,9 @@ class AddressBaseVocabulary(known: Set<String> = emptySet()) {
                 val parsed = tab.getOrNull(index) ?: continue
                 for (row in parsed.rows) {
                     for ((column, value) in row.candidates) {
-                        if (value.any { it.isDigit() }) continue
+                        // Пропускаем значения вообще без букв: числа — это
+                        // цены и телефоны. Район может содержать цифру: «5 мкр».
+                        if (value.none { it.isLetter() }) continue
                         counts.getOrPut(column) { mutableMapOf() }
                             .merge(value, 1, Int::plus)
                     }

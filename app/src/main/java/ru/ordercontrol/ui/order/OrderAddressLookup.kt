@@ -1,9 +1,11 @@
 package ru.ordercontrol.ui.order
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import ru.ordercontrol.AppGraph
 import ru.ordercontrol.data.db.AddressBaseEntry
 
@@ -39,8 +41,19 @@ class OrderAddressLookup(
         job = scope.launch {
             delay(LOOKUP_DELAY_MS)
             if (query != text) return@launch
-            onSuggestions(text, AppGraph.addressBase.search(text))
-            onBase(text, AppGraph.addressBase.find(text))
+            // Поиск подсказок и точное совпадение сканируют базу адресов
+            // линейно — уводим их с главного потока; колбэки остаются
+            // на нём.
+            val suggestions = withContext(Dispatchers.Default) {
+                AppGraph.addressBase.search(text)
+            }
+            if (query != text) return@launch
+            onSuggestions(text, suggestions)
+            val base = withContext(Dispatchers.Default) {
+                AppGraph.addressBase.find(text)
+            }
+            if (query != text) return@launch
+            onBase(text, base)
         }
     }
 

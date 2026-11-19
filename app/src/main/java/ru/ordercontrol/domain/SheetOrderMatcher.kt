@@ -175,7 +175,15 @@ object SheetOrderMatcher {
      * адрес из колонки Q в той же строке.
      */
     fun rowKey(tabName: String, row: SheetOrderRow): String =
-        "$tabName:${row.rowIndex}:${row.column}"
+        rowKey(tabName, row.rowIndex, row.column)
+
+    /**
+     * Единственное место, где строится ключ строки: и отправка, и проверка
+     * обязаны собирать его одинаково, иначе собственная запись не закроет
+     * свою строку при следующей проверке.
+     */
+    internal fun rowKey(tabName: String, rowIndex: Int, column: Int): String =
+        "$tabName:$rowIndex:$column"
 
     /** Ключ пары «адрес записи → адрес таблицы» для запомненных решений. */
     fun pairKey(recordAddress: String, rowAddress: String): String =
@@ -239,11 +247,15 @@ object SheetOrderMatcher {
      *
      * Недописанное слово должно быть не короче [MIN_PREFIX]. Короткие слова
      * сравниваются целиком: иначе «5» и «53» стали бы одним домом.
+     *
+     * Дом из одних цифр — тоже всегда целиком: «116» не префикс «116а»,
+     * это разные дома с литерой и без.
      */
     private fun sameWord(a: String, b: String): Boolean {
         if (a == b) return true
-        val shorter = minOf(a.length, b.length)
-        if (shorter < MIN_PREFIX) return false
+        val shorter = if (a.length <= b.length) a else b
+        if (shorter.length < MIN_PREFIX) return false
+        if (shorter.all { it.isDigit() }) return false
         return a.startsWith(b) || b.startsWith(a)
     }
 

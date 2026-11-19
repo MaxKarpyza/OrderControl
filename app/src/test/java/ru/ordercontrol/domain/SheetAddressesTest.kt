@@ -89,4 +89,20 @@ class SheetAddressesTest {
     fun `address columns are B I Q`() {
         assertEquals(listOf(1, 8, 16), SheetAddresses.ADDRESS_COLUMNS)
     }
+
+    @Test
+    fun `address columns follow address base blocks`() {
+        // Четвёртый блок в раскладке должен быть виден и здесь, а не только
+        // базе адресов.
+        assertEquals(SheetAddressBase.BLOCKS.map { it.address }, SheetAddresses.ADDRESS_COLUMNS)
+    }
+
+    @Test
+    fun `zero and negative bottles mean no order`() {
+        // То же правило, что в базе адресов: ноль и меньше — не заказано.
+        val rows = SheetAddresses.rows(SheetCsv.parse("a,Ленина 1,0\nb,Ленина 2,-2"))
+
+        assertNull(rows[0].bottles)
+        assertNull(rows[1].bottles)
+    }
 }

@@ -79,4 +79,18 @@ class CallCatchUpTest {
 
         assertTrue(!repository.hasRecordNear("+79991234567", callAt + 30 * 60_000, 120_000))
     }
+
+    @Test
+    fun `запись новее двух минут пропускается catchUp`() = runTest {
+        // Свежий звонок ещё пишется финализатором ресивера — восстановление
+        // не должно создавать по нему дубль.
+        val now = System.currentTimeMillis()
+        callLog.add("+79991234567", date = now - 60_000)
+        callLog.add("+79001112233", date = now - 10 * 60_000)
+
+        val added = CallSync.catchUp(callLog, calls = repository)
+
+        assertEquals(1, added)
+        assertEquals("+79001112233", callDao.all().single().phoneNormalized)
+    }
 }

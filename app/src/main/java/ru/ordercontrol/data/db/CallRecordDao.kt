@@ -45,9 +45,6 @@ interface CallRecordDao {
     )
     suspend fun previousOpenBefore(from: Long, before: Long): CallRecord?
 
-    @Query("SELECT COUNT(*) FROM call_records WHERE isProcessed = 0 AND isSilent = 0")
-    suspend fun unreadCount(): Long
-
     @Query("SELECT COUNT(*) FROM call_records WHERE callLogId = :callLogId")
     suspend fun countByCallLogId(callLogId: Long): Long
 
@@ -109,11 +106,13 @@ interface CallRecordDao {
      * Необработанные записи с адресом — кандидаты для сверки с таблицей.
      *
      * Адресом считается и имя контакта: если оператор не ввёл свой адрес,
-     * доставка идёт по контакту.
+     * доставка идёт по контакту. «Не клиент» и неотвеченные пропущенные
+     * не кандидаты: отправка в таблицу их всё равно не пишет.
      */
     @Query(
         "SELECT * FROM call_records WHERE isProcessed = 0 AND (" +
             "addressText != '' OR trim(displayName) != '') " +
+            "AND isSkipped = 0 AND (isAnswered IS NULL OR isAnswered != 0) " +
             "ORDER BY incomingAt DESC",
     )
     suspend fun openWithAddress(): List<CallRecord>
@@ -210,12 +209,15 @@ interface CallRecordDao {
      * Обработанные записи, ещё не отправленные в общую историю операторов.
      *
      * Берутся только записи с телефоном: ради номера общая история и нужна.
-     * Окно ограничено сроком хранения строки во вкладке — то, что старше,
-     * всё равно удалится раньше, чем его кто-нибудь прочитает.
+     * «Не клиент» и неотвеченные пропущенные не отправляются: коллеги читают
+     * историю как список заказов. Окно ограничено сроком хранения строки во
+     * вкладке — то, что старше, всё равно удалится раньше, чем его
+     * кто-нибудь прочитает.
      */
     @Query(
         "SELECT * FROM call_records WHERE isProcessed = 1 AND closeReason IN (:reasons) " +
             "AND phoneNormalized IS NOT NULL AND phoneNormalized != '' " +
+            "AND isSkipped = 0 AND (isAnswered IS NULL OR isAnswered != 0) " +
             "AND historySentAt IS NULL AND processedAt >= :since ORDER BY processedAt ASC",
     )
     suspend fun unsentToHistory(reasons: List<CloseReason>, since: Long): List<CallRecord>

@@ -2,6 +2,7 @@ package ru.ordercontrol.data
 
 import android.Manifest
 import android.accounts.AccountManager
+import android.util.Log
 import android.content.ContentProviderOperation
 import android.content.Context
 import android.content.pm.PackageManager
@@ -60,7 +61,10 @@ class ContactRepository(
                 }
                 return@withContext ContactMatcher.findName(number, entries)
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            // Сбой провайдера контактов — это не «контакт не найден»,
+            // а именно сбой: молчать нельзя, иначе причину не найти.
+            Log.w(TAG, "чтение контактов не удалось", e)
             return@withContext null
         }
         null
@@ -99,7 +103,8 @@ class ContactRepository(
             try {
                 context.contentResolver.applyBatch(ContactsContract.AUTHORITY, operations)
                 true
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                Log.w(TAG, "создание контакта не удалось", e)
                 false
             }
         }
@@ -121,6 +126,7 @@ class ContactRepository(
             PackageManager.PERMISSION_GRANTED
 
     private companion object {
+        const val TAG = "ContactRepository"
         const val GOOGLE_ACCOUNT_TYPE = "com.google"
     }
 }

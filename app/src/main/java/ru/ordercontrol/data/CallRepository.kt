@@ -49,7 +49,7 @@ class CallRepository(
     /** Необработанные записи с прошлым заказом номера, реактивно. */
     fun observeOpenItems(): Flow<List<OpenCallItem>> =
         callDao.observeOpen().map { records ->
-            val written = writtenAddressesSinceYesterday()
+            val written = callDao.writtenAddressesSinceYesterday()
             records.map { record ->
                 val previous = record.phoneNormalized
                     ?.let { phone -> callDao.previousOrder(phone, record.id) }
@@ -61,29 +61,6 @@ class CallRepository(
             }
         }
 
-    suspend fun openItems(): List<OpenCallItem> {
-        val written = writtenAddressesSinceYesterday()
-        return callDao.openRecords().map { record ->
-            val previous = record.phoneNormalized
-                ?.let { phone -> callDao.previousOrder(phone, record.id) }
-            OpenCallItem(
-                record = record,
-                previousOrder = previous,
-                writtenBefore = AddressNormalizer.normalize(record.deliveryAddress) in written,
-            )
-        }
-    }
-
-    /** Адреса из записей, которые приложение писало в таблицу вчера и сегодня. */
-    private suspend fun writtenAddressesSinceYesterday(): Set<String> {
-        val zone = ZoneId.systemDefault()
-        val from = LocalDate.now(zone).minusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
-        return callDao.writtenSince(from)
-            .map { AddressNormalizer.normalize(it.deliveryAddress) }
-            .filter { it.isNotEmpty() }
-            .toSet()
-    }
-
     /**
      * Снимает отметку «ранее обработана» с этого адреса: оператор говорит,
      * что это отдельный заказ, и он должен уйти в таблицу как новый.
@@ -92,9 +69,7 @@ class CallRepository(
         val record = callDao.findById(recordId) ?: return
         val address = AddressNormalizer.normalize(record.deliveryAddress)
         if (address.isEmpty()) return
-        val zone = ZoneId.systemDefault()
-        val from = LocalDate.now(zone).minusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
-        val ids = callDao.writtenSince(from)
+        val ids = callDao.recordsWrittenSinceYesterday()
             .filter { AddressNormalizer.normalize(it.deliveryAddress) == address }
             .map { it.id }
         if (ids.isNotEmpty()) callDao.clearSheetWritten(ids)
@@ -104,7 +79,7 @@ class CallRepository(
 
     /** Обработанные оператором записи, новые сверху: вкладка истории. */
     fun observeHistory(): Flow<List<CallRecord>> =
-        callDao.observeHistory(reasons = HISTORY_REASONS)
+        callDao.observeHistory(reasons = CloseReason.HISTORY_REASONS)
 
     suspend fun recordById(id: Long): CallRecord? = callDao.findById(id)
 
@@ -402,8 +377,6 @@ class CallRepository(
         callDao.reopen(recordId)
     }
 
-    suspend fun unreadCount(): Int = callDao.unreadCount().toInt()
-
     /** Необработанные записи, помеченные как пропущенные. */
     suspend fun openMissed(): List<CallRecord> = callDao.openMissed()
 
@@ -445,7 +418,7 @@ class CallRepository(
      * относится к принятым и пропущенным звонкам.
      */
     suspend fun unreadSummary(): UnreadSummary {
-        val records = callDao.openRecords().filter { !it.isSilent }
+        val records = callDao.openRecords()
         return UnreadSummary(
             total = records.size,
             answered = records.count { it.isAnswered == true },
@@ -483,10 +456,5 @@ class CallRepository(
             val name = contacts.findName(phone) ?: continue
             callDao.updateName(record.id, name)
         }
-    }
-
-    private companion object {
-        /** Записи, закрытые оператором, а не системой. */
-        val HISTORY_REASONS = listOf(CloseReason.DONE, CloseReason.SHEET)
     }
 }

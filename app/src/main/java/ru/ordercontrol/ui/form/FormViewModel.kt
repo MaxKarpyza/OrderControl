@@ -110,6 +110,9 @@ class FormViewModel(
         viewModelScope.launch {
             try {
                 saveOrder(current)
+                // Черновик карточки A не должен перейти в карточку B: load()
+                // предпочитает черновик сохранённым значениям записи.
+                clearDraft()
                 load(target.id)
             } catch (_: Exception) {
                 // Без сохранения текущей карточки на неё нельзя переключиться:

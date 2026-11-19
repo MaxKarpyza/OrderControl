@@ -34,6 +34,22 @@ class HistorySearchTest {
     }
 
     @Test
+    fun `address with yo is found without yo`() {
+        assertTrue(HistorySearch.matches("Иван", "пр. Артёма 114", null, "артема"))
+        assertTrue(HistorySearch.matches("Иван", "пр. Артёма 114, кв. 2-314", null, "Артёма 114"))
+    }
+
+    @Test
+    fun `name with yo is found without yo`() {
+        assertTrue(HistorySearch.matches("Артём Соколов", "Кирова 5", null, "артем"))
+    }
+
+    @Test
+    fun `noise-only query does not match everything`() {
+        assertFalse(HistorySearch.matches("Иван", "Кирова 5", "+79991234567", "кв."))
+    }
+
+    @Test
     fun `unrelated query matches nothing`() {
         assertFalse(HistorySearch.matches("Иван", "Кирова 5", "+79991234567", "Сидоров"))
     }

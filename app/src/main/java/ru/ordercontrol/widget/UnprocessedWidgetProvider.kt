@@ -1,9 +1,6 @@
 package ru.ordercontrol.widget
 
 import android.app.PendingIntent
-import android.appwidget.AppWidgetManager
-import android.appwidget.AppWidgetProvider
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.view.View
@@ -14,27 +11,12 @@ import ru.ordercontrol.R
 import ru.ordercontrol.data.UnreadSummary
 
 /** Виджет 2x2: счётчик необработанных звонков и цветовая индикация. */
-class UnprocessedWidgetProvider : AppWidgetProvider() {
-
-    override fun onUpdate(
-        context: Context,
-        appWidgetManager: AppWidgetManager,
-        appWidgetIds: IntArray,
-    ) {
-        WidgetRefresh.updateAll(context)
-    }
-
-    override fun onEnabled(context: Context) {
-        WidgetRefresh.updateAll(context)
-    }
+class UnprocessedWidgetProvider : WidgetProvider() {
 
     companion object {
         fun render(context: Context, summary: UnreadSummary) {
-            val manager = AppWidgetManager.getInstance(context)
-            val ids = manager.getAppWidgetIds(
-                ComponentName(context, UnprocessedWidgetProvider::class.java),
-            )
-            if (ids.isEmpty()) return
+            val (manager, ids) = widgetTargets(context, UnprocessedWidgetProvider::class.java)
+                ?: return
 
             val views = RemoteViews(context.packageName, R.layout.widget_unprocessed)
             val count = summary.total

@@ -59,7 +59,10 @@ class WorkScheduleTest {
             days = setOf(DayOfWeek.MONDAY),
         )
         assertTrue(night.isWorkingAt(millis(2026, 10, 26, 23, 0), zone))
-        assertTrue(night.isWorkingAt(millis(2026, 10, 26, 5, 59), zone))
+        // 2026-10-27 — вторник: утренний хвост смены, начатой в понедельник.
+        assertTrue(night.isWorkingAt(millis(2026, 10, 27, 3, 0), zone))
+        // Понедельник 05:59 — смена ещё не началась.
+        assertFalse(night.isWorkingAt(millis(2026, 10, 26, 5, 59), zone))
         assertFalse(night.isWorkingAt(millis(2026, 10, 26, 6, 0), zone))
         assertFalse(night.isWorkingAt(millis(2026, 10, 26, 12, 0), zone))
     }

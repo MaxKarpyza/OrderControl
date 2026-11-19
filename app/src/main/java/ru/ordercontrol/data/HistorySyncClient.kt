@@ -69,9 +69,11 @@ class HistorySyncClient(
                 WebAppPost.post(endpointUrl, buildSyncBody(operator, push))
             } catch (_: IOException) {
                 return@withContext HistorySyncResult.NoNetwork
-            } ?: return@withContext HistorySyncResult.Failure("HTTP")
+            }
+            val body = response.body
+                ?: return@withContext HistorySyncResult.Failure("HTTP ${response.code}")
 
-            parse(response)
+            parse(body)
         }
 
     internal fun parse(response: String): HistorySyncResult {

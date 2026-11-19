@@ -74,4 +74,20 @@ class AddressNormalizerTest {
     fun `zero is not bottles`() {
         assertNull(AddressNormalizer.bottlesFromText("0"))
     }
+
+    @Test
+    fun `ukrainian letters are kept as letters`() {
+        // і, ї, є, ґ — вне диапазона а–я и раньше становились разделителями.
+        assertEquals("гагаріна 7", AddressNormalizer.normalize("Гагаріна 7"))
+        assertEquals("смітників", AddressNormalizer.normalize("Смітників"))
+    }
+
+    @Test
+    fun `latin homoglyphs become cyrillic`() {
+        // o в «Кемерoвская» — латинская: ввод с неправильной раскладкой.
+        assertEquals(
+            AddressNormalizer.normalize("Кемеровская"),
+            AddressNormalizer.normalize("Кемерoвская"),
+        )
+    }
 }

@@ -199,7 +199,6 @@ class CallRepositoryTest {
         val id = register(at = night)!!
 
         assertFalse(callDao.byId(id)!!.isSilent)
-        assertEquals(1, repository.unreadCount())
     }
 
     @Test
@@ -409,7 +408,6 @@ class CallRepositoryTest {
         register(at = night)
         register(at = workingNoon, number = "+79001112233")
 
-        assertEquals(2, repository.unreadCount())
         assertEquals(2, callDao.all().count { !it.isProcessed })
     }
 
@@ -576,5 +574,55 @@ class CallRepositoryTest {
         val history = repository.observeHistory().first()
 
         assertEquals(listOf(newer, older), history.map { it.id })
+    }
+
+    @Test
+    fun `проверку таблицы не интересуют «не клиент» и неотвеченные`() = runTest {
+        val normal = register(number = "+79991110001")!!
+        repository.saveOrder(
+            recordId = normal,
+            bottles = "2",
+            address = "Мира 11",
+            nameInput = null,
+            skip = SkipUpdate.Unchanged,
+        )
+        val skipped = register(number = "+79991110002")!!
+        repository.saveOrder(
+            recordId = skipped,
+            bottles = "2",
+            address = "Мира 12",
+            nameInput = null,
+            skip = SkipUpdate.Set(BlacklistKind.PERMANENT),
+        )
+        val missed = register(number = "+79991110003", answered = false)!!
+        repository.saveOrder(
+            recordId = missed,
+            bottles = "2",
+            address = "Мира 13",
+            nameInput = null,
+            skip = SkipUpdate.Unchanged,
+        )
+
+        assertEquals(listOf(normal), callDao.openWithAddress().map { it.id })
+    }
+
+    @Test
+    fun `в общую историю не идут «не клиент» и неотвеченные`() = runTest {
+        val normal = register(number = "+79991110001")!!
+        val skipped = register(number = "+79991110002")!!
+        repository.saveOrder(
+            recordId = skipped,
+            bottles = "2",
+            address = "Мира 12",
+            nameInput = null,
+            skip = SkipUpdate.Set(BlacklistKind.PERMANENT),
+        )
+        register(number = "+79991110003", answered = false)
+
+        callDao.closeAll(at = workingNoon, reason = CloseReason.DONE)
+
+        val unsent = callDao.unsentToHistory(reasons = listOf(CloseReason.DONE), since = 0)
+
+        assertEquals(listOf(normal), unsent.map { it.id })
     }
 }

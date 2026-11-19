@@ -52,13 +52,15 @@ class SheetWriteClient(private val endpointUrl: String = DEFAULT_ENDPOINT) {
                 post(body)
             } catch (_: IOException) {
                 return@withContext SheetWriteResult.NoNetwork
-            } ?: return@withContext SheetWriteResult.Failure("HTTP")
+            }
+            val responseBody = response.body
+                ?: return@withContext SheetWriteResult.Failure("HTTP ${response.code}")
 
-            parse(response, tab)
+            parse(responseBody, tab)
         }
 
-    /** POST и чтение тела ответа; `null`, если сервер ответил не 200. */
-    private fun post(body: String): String? = WebAppPost.post(endpointUrl, body)
+    /** POST и чтение тела ответа; тело — `null`, если сервер ответил не 200. */
+    private fun post(body: String): WebAppPost.Response = WebAppPost.post(endpointUrl, body)
 
     private fun parse(response: String, tab: String): SheetWriteResult {
         val json = try {
