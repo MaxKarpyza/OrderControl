@@ -15,6 +15,13 @@ import ru.ordercontrol.data.db.CallRecord
 import ru.ordercontrol.data.db.SharedHistoryEntry
 import ru.ordercontrol.widget.WidgetRefresh
 
+/** Какая часть истории показана: всё, только свои или только чужие записи. */
+enum class HistoryFilter {
+    ALL,
+    MINE,
+    OTHERS,
+}
+
 class HistoryViewModel(application: Application) : AndroidViewModel(application) {
 
     var loading by mutableStateOf(true)
@@ -24,11 +31,8 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
     var query by mutableStateOf("")
         private set
 
-    /**
-     * Показывать только свои записи. Чужие включаются переключателем «Все»:
-     * по умолчанию они бы мешали в обычной работе.
-     */
-    var onlyMine by mutableStateOf(true)
+    /** Какая часть истории показана; по умолчанию — всё. */
+    var filter by mutableStateOf(HistoryFilter.ALL)
         private set
 
     /** Идёт обмен общей историей. */
@@ -47,7 +51,7 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
     val hasOthers: Boolean
         get() = others.isNotEmpty()
 
-    /** Все строки с учётом переключателя «Мои / Все». */
+    /** Все строки с учётом фильтра «Все / Мои / Не мои». */
     var items by mutableStateOf<List<HistoryItem>>(emptyList())
         private set
 
@@ -77,8 +81,12 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
     /** Пересобирает список и фильтр: вызывается при смене данных, запроса или переключателя. */
     private fun rebuild() {
         items = buildList {
-            mine.forEach { add(HistoryItem.Mine(it)) }
-            if (!onlyMine) others.forEach { add(HistoryItem.Other(it)) }
+            if (filter != HistoryFilter.OTHERS) {
+                mine.forEach { add(HistoryItem.Mine(it)) }
+            }
+            if (filter != HistoryFilter.MINE) {
+                others.forEach { add(HistoryItem.Other(it)) }
+            }
         }.sortedByDescending { it.processedAt }
         visibleItems = items.filter { item ->
             HistorySearch.matches(
@@ -100,8 +108,8 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
         rebuild()
     }
 
-    fun showOnlyMine(value: Boolean) {
-        onlyMine = value
+    fun applyFilter(value: HistoryFilter) {
+        filter = value
         rebuild()
     }
 

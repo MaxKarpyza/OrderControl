@@ -75,9 +75,9 @@ fun HistoryScreen(modifier: Modifier = Modifier) {
             }
 
             FilterRow(
-                onlyMine = viewModel.onlyMine,
+                filter = viewModel.filter,
                 syncing = viewModel.syncing,
-                onOnlyMineChange = viewModel::showOnlyMine,
+                onFilterChange = viewModel::applyFilter,
                 onRefresh = viewModel::refresh,
             )
 
@@ -96,9 +96,9 @@ fun HistoryScreen(modifier: Modifier = Modifier) {
 
                     // Своих записей нет, а у других уже есть: подсказываем
                     // про переключатель, иначе история выглядит пустой.
-                    viewModel.onlyMine && viewModel.hasOthers ->
+                    viewModel.filter == HistoryFilter.MINE && viewModel.hasOthers ->
                         EmptyOnlyMine(Modifier.weight(1f)) {
-                            viewModel.showOnlyMine(false)
+                            viewModel.applyFilter(HistoryFilter.ALL)
                         }
 
                     else -> EmptyHistory(Modifier.weight(1f))
@@ -167,12 +167,12 @@ private fun SearchField(
     )
 }
 
-/** Переключатель «Мои / Все» и ручное обновление общей истории. */
+/** Переключатель «Все / Мои / Не мои» и ручное обновление общей истории. */
 @Composable
 private fun FilterRow(
-    onlyMine: Boolean,
+    filter: HistoryFilter,
     syncing: Boolean,
-    onOnlyMineChange: (Boolean) -> Unit,
+    onFilterChange: (HistoryFilter) -> Unit,
     onRefresh: () -> Unit,
 ) {
     Row(
@@ -183,14 +183,19 @@ private fun FilterRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         FilterChip(
-            selected = onlyMine,
-            onClick = { onOnlyMineChange(true) },
+            selected = filter == HistoryFilter.ALL,
+            onClick = { onFilterChange(HistoryFilter.ALL) },
+            label = { Text(stringResource(R.string.history_filter_all)) },
+        )
+        FilterChip(
+            selected = filter == HistoryFilter.MINE,
+            onClick = { onFilterChange(HistoryFilter.MINE) },
             label = { Text(stringResource(R.string.history_filter_mine)) },
         )
         FilterChip(
-            selected = !onlyMine,
-            onClick = { onOnlyMineChange(false) },
-            label = { Text(stringResource(R.string.history_filter_all)) },
+            selected = filter == HistoryFilter.OTHERS,
+            onClick = { onFilterChange(HistoryFilter.OTHERS) },
+            label = { Text(stringResource(R.string.history_filter_not_mine)) },
         )
         Spacer(Modifier.weight(1f))
         if (syncing) {

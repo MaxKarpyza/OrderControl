@@ -92,8 +92,9 @@
     <string name="history_search_empty_hint">Попробуйте изменить запрос.</string>
     <string name="history_restore">Вернуть в необработанные</string>
     <string name="history_restored">Запись возвращена в необработанные</string>
-    <string name="history_filter_mine">Мои</string>
     <string name="history_filter_all">Все</string>
+    <string name="history_filter_mine">Мои</string>
+    <string name="history_filter_not_mine">Не мои</string>
     <string name="history_refresh">Обновить историю</string>
     <string name="history_sync_done">Общая история обновлена: чужих записей %1$d</string>
     <string name="history_sync_error">Не удалось обновить историю: %1$s</string>
