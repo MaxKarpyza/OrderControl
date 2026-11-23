@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material3.Button
@@ -28,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ru.ordercontrol.R
 import ru.ordercontrol.data.OpenCallItem
@@ -58,20 +60,31 @@ fun Context.dial(phone: String) {
 /** Строка «подпись — значение» в карточке. */
 @Composable
 fun InfoLine(label: String, value: String) {
-    Row {
+    // Базовая линия, а не верх строки: мелкая подпись иначе «висит» выше
+    // значения. Ширина подписи фиксирована — значения начинаются в одной
+    // колонке, а не с разных отступов.
+    Row(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(end = 8.dp),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .width(LABEL_WIDTH)
+                .alignByBaseline(),
         )
         Text(
             text = value,
             style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .alignByBaseline(),
         )
     }
 }
+
+private val LABEL_WIDTH = 88.dp
 
 /**
  * Общее тело карточки заказа: заголовок «адрес, иначе телефон», кнопка
@@ -101,11 +114,16 @@ fun RecordCardBody(
     headerContent: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit = {},
 ) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         Text(
             text = title,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Medium,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
         if (headerTrailing != null) {
@@ -113,6 +131,7 @@ fun RecordCardBody(
                 text = headerTrailing,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
             )
         }
         if (onDial != null) {
@@ -285,6 +304,7 @@ private fun CardActionText(text: String) {
         text = text,
         style = MaterialTheme.typography.labelLarge,
         maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
     )
 }
 

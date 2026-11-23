@@ -2,13 +2,15 @@ package ru.ordercontrol.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -75,6 +77,7 @@ fun CallStatusBadge(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun BadgeRow(
     skipped: Boolean,
@@ -89,7 +92,11 @@ fun BadgeRow(
     if (!skipped && !silent && deliveryDay == null && answered == null && !previouslyWritten && !manual) {
         return
     }
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        itemVerticalAlignment = Alignment.CenterVertically,
+    ) {
         if (previouslyWritten) {
             Badge(
                 text = stringResource(R.string.badge_written_before),

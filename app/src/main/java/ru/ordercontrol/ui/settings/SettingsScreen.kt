@@ -117,11 +117,16 @@ fun SettingsScreen(onBack: () -> Unit) {
                 )
             }
             Text(
-                text = stringResource(R.string.settings_title),
+                text = stringResource(R.string.settings_screen_title),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.SemiBold,
             )
         }
+
+        Text(
+            text = stringResource(R.string.settings_title),
+            style = MaterialTheme.typography.titleMedium,
+        )
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -148,28 +153,30 @@ fun SettingsScreen(onBack: () -> Unit) {
             style = MaterialTheme.typography.titleMedium,
         )
 
-        ALL_DAYS.forEach { day ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        days = if (day in days) days - day else days + day
-                        error = null
-                    }
-                    .padding(vertical = 2.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Checkbox(
-                    checked = day in days,
-                    onCheckedChange = { checked ->
-                        days = if (checked) days + day else days - day
-                        error = null
-                    },
-                )
-                Text(
-                    text = stringResource(day.labelRes()),
-                    style = MaterialTheme.typography.bodyLarge,
-                )
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            ALL_DAYS.forEach { day ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            days = if (day in days) days - day else days + day
+                            error = null
+                        }
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(
+                        checked = day in days,
+                        onCheckedChange = { checked ->
+                            days = if (checked) days + day else days - day
+                            error = null
+                        },
+                    )
+                    Text(
+                        text = stringResource(day.labelRes()),
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                }
             }
         }
 
@@ -186,22 +193,24 @@ fun SettingsScreen(onBack: () -> Unit) {
             style = MaterialTheme.typography.titleMedium,
         )
 
-        UnprocessedSort.entries.forEach { option ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { sort = option }
-                    .padding(vertical = 2.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                RadioButton(
-                    selected = sort == option,
-                    onClick = { sort = option },
-                )
-                Text(
-                    text = stringResource(option.labelRes()),
-                    style = MaterialTheme.typography.bodyLarge,
-                )
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            UnprocessedSort.entries.forEach { option ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { sort = option }
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(
+                        selected = sort == option,
+                        onClick = { sort = option },
+                    )
+                    Text(
+                        text = stringResource(option.labelRes()),
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                }
             }
         }
 
