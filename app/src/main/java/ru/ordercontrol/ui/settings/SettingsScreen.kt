@@ -24,6 +24,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -45,6 +46,7 @@ import java.time.DayOfWeek
 import kotlinx.coroutines.launch
 import ru.ordercontrol.AppGraph
 import ru.ordercontrol.R
+import ru.ordercontrol.domain.UnprocessedSort
 import ru.ordercontrol.domain.WorkSchedule
 import ru.ordercontrol.ui.DisplayFormat
 import ru.ordercontrol.ui.base.AddressBaseSection
@@ -80,6 +82,7 @@ fun SettingsScreen(onBack: () -> Unit) {
     var loaded by rememberSaveable { mutableStateOf(false) }
     var operatorId by rememberSaveable { mutableStateOf("") }
     var operatorName by rememberSaveable { mutableStateOf("") }
+    var sort by rememberSaveable { mutableStateOf(UnprocessedSort.DEFAULT) }
     val invalidDaysMessage = stringResource(R.string.settings_invalid)
 
     LaunchedEffect(Unit) {
@@ -93,6 +96,7 @@ fun SettingsScreen(onBack: () -> Unit) {
         val operator = AppGraph.settings.operator()
         operatorId = operator.id
         operatorName = operator.name.orEmpty()
+        sort = AppGraph.settings.currentUnprocessedSort()
         loaded = true
     }
 
@@ -178,6 +182,32 @@ fun SettingsScreen(onBack: () -> Unit) {
         HorizontalDivider()
 
         Text(
+            text = stringResource(R.string.settings_sort_title),
+            style = MaterialTheme.typography.titleMedium,
+        )
+
+        UnprocessedSort.entries.forEach { option ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { sort = option }
+                    .padding(vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RadioButton(
+                    selected = sort == option,
+                    onClick = { sort = option },
+                )
+                Text(
+                    text = stringResource(option.labelRes()),
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+            }
+        }
+
+        HorizontalDivider()
+
+        Text(
             text = stringResource(R.string.history_author),
             style = MaterialTheme.typography.titleMedium,
         )
@@ -226,6 +256,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                         ),
                     )
                     AppGraph.settings.setOperatorName(operatorName)
+                    AppGraph.settings.setUnprocessedSort(sort)
                     WidgetRefresh.updateAll(context)
                     onBack()
                 }
@@ -270,4 +301,11 @@ private fun DayOfWeek.labelRes(): Int = when (this) {
     DayOfWeek.FRIDAY -> R.string.day_friday
     DayOfWeek.SATURDAY -> R.string.day_saturday
     DayOfWeek.SUNDAY -> R.string.day_sunday
+}
+
+private fun UnprocessedSort.labelRes(): Int = when (this) {
+    UnprocessedSort.TIME_EARLIER -> R.string.settings_sort_time_earlier
+    UnprocessedSort.TIME_LATER -> R.string.settings_sort_time_later
+    UnprocessedSort.ALPHABET -> R.string.settings_sort_alphabet
+    UnprocessedSort.DISTRICT -> R.string.settings_sort_district
 }

@@ -152,6 +152,11 @@
     <string name="settings_invalid">Выберите хотя бы один рабочий день</string>
     <string name="settings_operator_name">Имя, отчество</string>
     <string name="settings_operator_hint">Подпись в общей истории операторов. Пусто — «%1$s».</string>
+    <string name="settings_sort_title">Порядок незаписанных</string>
+    <string name="settings_sort_time_earlier">Время принят раньше</string>
+    <string name="settings_sort_time_later">Время принят позже</string>
+    <string name="settings_sort_alphabet">По алфавиту</string>
+    <string name="settings_sort_district">По району</string>
 
     <!-- Обновления -->
     <string name="update_section_title">Обновления</string>

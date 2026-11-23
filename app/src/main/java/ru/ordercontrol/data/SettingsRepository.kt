@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import ru.ordercontrol.domain.UnprocessedSort
 import ru.ordercontrol.domain.WorkSchedule
 
 /** Аккаунт, в который пишутся новые контакты. `null` — локальная книга. */
@@ -59,6 +60,7 @@ class SettingsRepository(private val context: Context) : ScheduleProvider, Opera
         val SHEET_FETCH_COUNT = intPreferencesKey("sheet_fetch_count")
         val OPERATOR_ID = stringPreferencesKey("operator_id")
         val OPERATOR_NAME = stringPreferencesKey("operator_name")
+        val UNPROCESSED_SORT = stringPreferencesKey("unprocessed_sort")
     }
 
     private val operatorMutex = Mutex()
@@ -224,6 +226,17 @@ class SettingsRepository(private val context: Context) : ScheduleProvider, Opera
 
     suspend fun setAddressBaseDistricts(districts: Set<String>) {
         context.settingsDataStore.edit { it[Keys.ADDRESS_BASE_DISTRICTS] = districts }
+    }
+
+    /** Порядок записей на вкладке «Незаписанные». */
+    val unprocessedSort: Flow<UnprocessedSort> = context.settingsDataStore.data
+        .map { UnprocessedSort.fromKey(it[Keys.UNPROCESSED_SORT]) }
+
+    suspend fun currentUnprocessedSort(): UnprocessedSort =
+        UnprocessedSort.fromKey(context.settingsDataStore.data.first()[Keys.UNPROCESSED_SORT])
+
+    suspend fun setUnprocessedSort(sort: UnprocessedSort) {
+        context.settingsDataStore.edit { it[Keys.UNPROCESSED_SORT] = sort.name }
     }
 
     private fun Preferences.toSchedule(): WorkSchedule {

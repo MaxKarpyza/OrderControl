@@ -9,6 +9,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import java.text.Collator
+import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -23,6 +25,7 @@ import ru.ordercontrol.data.SheetTab
 import ru.ordercontrol.data.SheetWriteOutcome
 import ru.ordercontrol.data.SheetWriteProgress
 import ru.ordercontrol.domain.AmbiguousMatch
+import ru.ordercontrol.domain.UnprocessedSort
 import ru.ordercontrol.phone.CallSync
 import ru.ordercontrol.widget.WidgetRefresh
 
@@ -33,6 +36,16 @@ enum class SheetCheckPhase { Idle, Loading, Done, Error }
 enum class SheetWritePhase { Idle, Writing, Done, Error }
 
 class UnprocessedViewModel(application: Application) : AndroidViewModel(application) {
+
+    /** Записи в исходном порядке: пересортировываются при смене настройки. */
+    private var loadedItems: List<OpenCallItem> = emptyList()
+
+    /** Порядок записей: сохраняется в настройках, вкладка подхватывает сразу. */
+    private var sort: UnprocessedSort = UnprocessedSort.DEFAULT
+
+    /** Сравнение русских букв по алфавиту, а не по кодам символов. */
+    private val collator: Collator = Collator.getInstance(Locale("ru"))
+        .apply { strength = Collator.PRIMARY }
 
     var items by mutableStateOf<List<OpenCallItem>>(emptyList())
         private set
@@ -89,13 +102,15 @@ class UnprocessedViewModel(application: Application) : AndroidViewModel(applicat
 
     init {
         observeItems()
+        observeSort()
     }
 
     private fun observeItems() {
         viewModelScope.launch {
             try {
                 AppGraph.calls.observeOpenItems().collectLatest { records ->
-                    items = records
+                    loadedItems = records
+                    items = sorted(records)
                     loading = false
                 }
             } catch (_: Exception) {
@@ -104,6 +119,51 @@ class UnprocessedViewModel(application: Application) : AndroidViewModel(applicat
             }
         }
     }
+
+    private fun observeSort() {
+        viewModelScope.launch {
+            AppGraph.settings.unprocessedSort.collectLatest { value ->
+                sort = value
+                items = sorted(loadedItems)
+            }
+        }
+    }
+
+    /** Сортирует записи по выбранному в настройках порядку. */
+    private fun sorted(records: List<OpenCallItem>): List<OpenCallItem> = when (sort) {
+        UnprocessedSort.TIME_EARLIER -> records.sortedWith(
+            compareBy({ it.record.incomingAt }, { it.record.id }),
+        )
+
+        UnprocessedSort.TIME_LATER -> records.sortedWith(
+            compareByDescending<OpenCallItem> { it.record.incomingAt }
+                .thenByDescending { it.record.id },
+        )
+
+        UnprocessedSort.ALPHABET -> records.sortedWith(
+            Comparator<OpenCallItem> { a, b -> collator.compare(a.alphabetKey(), b.alphabetKey()) }
+                .thenBy { it.record.incomingAt },
+        )
+
+        UnprocessedSort.DISTRICT -> records.sortedWith(
+            Comparator<OpenCallItem> { a, b ->
+                val first = a.record.district.orEmpty().trim()
+                val second = b.record.district.orEmpty().trim()
+                when {
+                    first.isEmpty() && second.isEmpty() -> 0
+                    first.isEmpty() -> 1
+                    second.isEmpty() -> -1
+                    else -> collator.compare(first, second)
+                }
+            }.thenBy { it.record.incomingAt },
+        )
+    }
+
+    /** Что читать в алфавитном порядке: имя клиента, адрес, затем номер. */
+    private fun OpenCallItem.alphabetKey(): String =
+        record.displayName?.takeIf { it.isNotBlank() }
+            ?: record.deliveryAddress.takeIf { it.isNotBlank() }
+            ?: record.phoneNormalized.orEmpty()
 
     fun refresh() {
         viewModelScope.launch {
