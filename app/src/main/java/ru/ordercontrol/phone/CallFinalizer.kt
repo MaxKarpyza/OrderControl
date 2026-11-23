@@ -30,26 +30,40 @@ class CallFinalizer(
      */
     suspend fun resolve(session: CallSession): Long? = CallWrites.mutex.withLock {
         val sessionNumber = PhoneNormalizer.normalize(session.number)
+        // К `IDLE` журнал обычно уже содержит звонок, и его `DURATION` —
+        // длительность разговора. В сессии есть только начало звонка,
+        // поэтому там учтено ещё и время дозвона: журнал точнее.
+        val entry = if (callLog.hasPermission()) findEntry(session) else null
+        val durationSec = entry
+            // Без номера в сессии запись журнала уже выбрана по времени;
+            // с номером — сверяем, чтобы не взять длительность чужого звонка.
+            ?.takeIf {
+                sessionNumber == null ||
+                    PhoneNormalizer.normalize(it.number) == sessionNumber
+            }
+            ?.durationSec
+            ?.takeIf { it > 0 }
+            ?: session.durationSecAt(System.currentTimeMillis())
+
         if (sessionNumber != null) {
             return@withLock calls.registerIncoming(
                 numberRaw = session.number,
                 answered = session.answered,
                 incomingAt = session.startedAt,
                 callLogId = null,
+                durationSec = durationSec,
             )
         }
 
         // Номер пустой. Пробуем журнал один раз — без ожидания.
-        if (callLog.hasPermission()) {
-            val entry = findEntry(session)?.takeIf { !calls.isCallLogIdKnown(it.id) }
-            if (entry != null) {
-                return@withLock calls.registerIncoming(
-                    numberRaw = entry.number,
-                    answered = entry.answered,
-                    incomingAt = entry.date,
-                    callLogId = entry.id,
-                )
-            }
+        if (entry != null && !calls.isCallLogIdKnown(entry.id)) {
+            return@withLock calls.registerIncoming(
+                numberRaw = entry.number,
+                answered = entry.answered,
+                incomingAt = entry.date,
+                callLogId = entry.id,
+                durationSec = durationSec,
+            )
         }
 
         // Журнал ещё не обновился: запись создаётся сразу, номер появится
@@ -60,8 +74,23 @@ class CallFinalizer(
             answered = session.answered,
             incomingAt = session.startedAt,
             callLogId = null,
+            durationSec = durationSec,
         )
     }
+
+    /**
+     * Запасная длительность из сессии: когда журнал ещё не обновился.
+     *
+     * Разговор считается от начала звонка — момента ответа прошивка не
+     * сообщает, поэтому сюда попадает и время дозвона. У неотвеченного
+     * звонка длительности нет: он не разговор.
+     */
+    private fun CallSession.durationSecAt(endedAt: Long): Int? =
+        if (!answered) {
+            null
+        } else {
+            ((endedAt - startedAt) / 1000).toInt().takeIf { it > 0 }
+        }
 
     /**
      * Запись журнала для звонка с пустым номером в `PHONE_STATE`.

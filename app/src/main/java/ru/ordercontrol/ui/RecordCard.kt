@@ -109,6 +109,7 @@ fun RecordCardBody(
     district: String?,
     onDial: (() -> Unit)? = null,
     headerTrailing: String? = null,
+    headerDuration: String? = null,
     addressInTitle: Boolean = false,
     comment: String? = null,
     hideEmptyLines: Boolean = false,
@@ -127,13 +128,27 @@ fun RecordCardBody(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        if (headerTrailing != null) {
-            Text(
-                text = headerTrailing,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-            )
+        if (headerTrailing != null || headerDuration != null) {
+            // Время и длительность — одной колонкой у правого края: строка
+            // заголовка не растягивается, а длительность мельче времени.
+            Column(horizontalAlignment = Alignment.End) {
+                if (headerTrailing != null) {
+                    Text(
+                        text = headerTrailing,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
+                if (headerDuration != null) {
+                    Text(
+                        text = headerDuration,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
+            }
         }
         if (onDial != null) {
             IconButton(onClick = onDial) {
@@ -183,6 +198,7 @@ fun RecordCardBody(
 fun RecordCardShell(
     record: CallRecord,
     headerTrailing: String? = null,
+    headerDuration: String? = null,
     onDial: (() -> Unit)? = null,
     highlightDelivery: Boolean = true,
     showDeliveryBadge: Boolean = true,
@@ -222,6 +238,7 @@ fun RecordCardShell(
                 district = record.district,
                 onDial = onDial,
                 headerTrailing = headerTrailing,
+                headerDuration = headerDuration,
                 addressInTitle = record.isManual && record.deliveryAddress.isNotBlank(),
                 headerContent = {
                     BadgeRow(
@@ -264,6 +281,7 @@ internal fun RecordCard(
         // Тап по «пропущен» отвечает на звонок задним числом.
         onMissedClick = if (item.record.isAnswered == false) onMarkAnswered else null,
         headerTrailing = DisplayFormat.callTime(item.record.incomingAt),
+        headerDuration = DisplayFormat.duration(item.record.durationSec),
         onDial = phone?.let { number -> { context.dial(number) } },
     ) {
         item.previousOrder?.let { previous ->

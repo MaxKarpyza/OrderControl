@@ -17,7 +17,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SheetTabEntity::class,
         SharedHistoryEntry::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -273,6 +273,21 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * 9 → 10: длительность разговора в записи.
+         *
+         * Колонка допускает `NULL`: у старых записей и у пропущенных звонков
+         * длительности нет, выдумывать её не нужно.
+         */
+        val MIGRATION_9_10: Migration = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                val columns = tableColumns(db, "call_records")
+                if ("durationSec" !in columns) {
+                    db.execSQL("ALTER TABLE call_records ADD COLUMN durationSec INTEGER")
+                }
+            }
+        }
+
         private fun tableColumns(db: SupportSQLiteDatabase, table: String): Set<String> =
             db.query("PRAGMA table_info(`$table`)").use { cursor ->
                 val nameIndex = cursor.getColumnIndexOrThrow("name")
@@ -292,6 +307,7 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_6_7,
                     MIGRATION_7_8,
                     MIGRATION_8_9,
+                    MIGRATION_9_10,
                 )
                 .build()
     }

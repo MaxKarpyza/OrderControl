@@ -202,8 +202,12 @@ class CallRepository(
         answered: Boolean,
         incomingAt: Long,
         callLogId: Long?,
+        durationSec: Int? = null,
     ): Long? {
         val phone = PhoneNormalizer.normalize(numberRaw)
+        // Нулевая длительность — это пропущенный звонок, а не разговор
+        // длиной в ноль секунд: показывать её в карточке незачем.
+        val duration = durationSec?.takeIf { it > 0 }
 
         // Временная пометка снимается ровно на этом звонке, и он же в заказ
         // не превращается: «не клиент» — это не заказ.
@@ -244,6 +248,9 @@ class CallRepository(
                     // пропущен: запись считается принятой, если принят хотя бы
                     // один из звонков этого номера.
                     isAnswered = answered || open.isAnswered == true,
+                    // Новый звонок перетирает время, но неизвестная
+                    // длительность не должна стирать уже сохранённую.
+                    durationSec = duration ?: open.durationSec,
                 ).withKnownOrder(known, contactName),
             )
             return open.id
@@ -255,6 +262,7 @@ class CallRepository(
                 displayName = contactName,
                 callLogId = callLogId,
                 incomingAt = incomingAt,
+                durationSec = duration,
                 isAnswered = answered,
             ).withKnownOrder(known, contactName),
         )

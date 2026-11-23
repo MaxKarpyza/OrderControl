@@ -128,6 +128,7 @@ object CallSync {
                     answered = entry.answered,
                     incomingAt = entry.date,
                     callLogId = entry.id,
+                    durationSec = entry.durationSec,
                 )
                 if (id != null) added++
                 known += entry.id

@@ -33,6 +33,11 @@ data class CallRecord(
     val displayName: String? = null,
     val callLogId: Long? = null,
     val incomingAt: Long,
+    /**
+     * Длительность разговора в секундах. `null` — неизвестна: у старых
+     * записей, у пропущенных звонков и у звонков, которых не было в журнале.
+     */
+    val durationSec: Int? = null,
     val bottlesText: String = "",
     val addressText: String = "",
     val isProcessed: Boolean = false,
