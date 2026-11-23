@@ -30,7 +30,7 @@ class SheetsClientNetworkTest {
 
     @Test
     fun `sheet index reports no network`() = runTest {
-        val result = client.fetchTodayAndTomorrow(LocalDate.of(2026, 10, 27))
+        val result = client.fetchRecentDays(LocalDate.of(2026, 10, 27))
 
         assertTrue(result is SheetFetchResult.NoNetwork)
     }

@@ -1,6 +1,7 @@
 package ru.ordercontrol.data
 
 import java.time.LocalDate
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -99,5 +100,56 @@ class SheetsClientTest {
     @Test
     fun `edit url`() {
         assertEquals(SheetsClient.DEFAULT_BASE_URL + "/edit", SheetsClient.editUrl())
+    }
+
+    @Test
+    fun `recent days include day after tomorrow`() = runTest {
+        // Сверка обязана читать вкладку послезавтра: иначе записанный туда
+        // заказ никогда не закроется и останется в необработанных.
+        val fake = RecordingSheetsClient()
+
+        val result = fake.fetchRecentDays(LocalDate.of(2026, 10, 26))
+
+        assertEquals(listOf("1", "2", "3"), fake.requestedGids)
+        assertEquals(
+            listOf("26.10.26", "27.10.26", "28.10.26"),
+            (result as SheetFetchResult.Success).tabs.map { it.name },
+        )
+    }
+
+    @Test
+    fun `recent days skip missing tabs`() = runTest {
+        val fake = RecordingSheetsClient(index = """{name: "26.10.26", gid: "1"}""")
+
+        val result = fake.fetchRecentDays(LocalDate.of(2026, 10, 26))
+
+        assertEquals(listOf("1"), fake.requestedGids)
+        assertEquals(
+            listOf("26.10.26"),
+            (result as SheetFetchResult.Success).tabs.map { it.name },
+        )
+    }
+}
+
+/** Клиент без настоящей сети: отдаёт список вкладок и пустой CSV. */
+private class RecordingSheetsClient(
+    private val index: String = listOf(
+        """{name: "26.10.26", gid: "1"}""",
+        """{name: "27.10.26", gid: "2"}""",
+        """{name: "28.10.26", gid: "3"}""",
+    ).joinToString(" "),
+) : SheetsClient() {
+
+    /** `gid` вкладок, которые клиент попросил скачать, по порядку. */
+    val requestedGids = mutableListOf<String>()
+
+    override fun download(requestUrl: String): String? = when {
+        requestUrl.endsWith("/htmlview") -> index
+        "gviz" in requestUrl -> {
+            requestedGids.add(requestUrl.substringAfter("gid="))
+            "\"\",\"\"\n"
+        }
+
+        else -> null
     }
 }

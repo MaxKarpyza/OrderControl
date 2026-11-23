@@ -33,7 +33,7 @@ sealed interface SheetFetchResult {
 }
 
 /**
- * Клиент Google Таблицы: скачивает CSV-вкладки за сегодня и завтра.
+ * Клиент Google Таблицы: скачивает CSV-вкладки ближайших дней.
  *
  * Вкладки читаются без авторизации. Имя вкладки — дата `дд.ММ.гг`
  * по системному часовому поясу.
@@ -46,20 +46,26 @@ sealed interface SheetFetchResult {
 open class SheetsClient(private val baseUrl: String = DEFAULT_BASE_URL) {
 
     /**
-     * Скачивает вкладки за [today] и за следующий день.
+     * Скачивает вкладки за [days] дней, начиная с [today].
+     *
+     * Дней три, а не два: заказ принимают и «на послезавтра», и его вкладку
+     * сверка обязана прочитать, иначе записанный заказ никогда не закроется.
      *
      * Отсутствие вкладки (например, завтрашней ещё нет) не считается ошибкой:
      * такая вкладка пропускается. Если не скачалась ни одна — возвращается
      * [SheetFetchResult.Failure] или [SheetFetchResult.NoNetwork].
      */
-    suspend fun fetchTodayAndTomorrow(today: LocalDate = LocalDate.now()): SheetFetchResult {
+    suspend fun fetchRecentDays(
+        today: LocalDate = LocalDate.now(),
+        days: Int = DAYS_TO_CHECK,
+    ): SheetFetchResult {
         val index = when (val result = fetchSheetIndex()) {
             is IndexResult.Ok -> result.sheets
             IndexResult.NoNetwork -> return SheetFetchResult.NoNetwork
             is IndexResult.HttpError -> return SheetFetchResult.Failure(result.reason)
         }
 
-        val names = listOf(tabName(today), tabName(today.plusDays(1)))
+        val names = (0 until days).map { tabName(today.plusDays(it.toLong())) }
         val tabs = mutableListOf<SheetTab>()
         var lastFailure: String? = null
         var networkFailed = false
@@ -220,6 +226,9 @@ open class SheetsClient(private val baseUrl: String = DEFAULT_BASE_URL) {
 
         private const val TIMEOUT_MS = 10_000
         private const val USER_AGENT = "OrderControl/1.0 (Android)"
+
+        /** Сегодня, завтра и послезавтра: самые дальние вкладки, которые заказы пополняют. */
+        private const val DAYS_TO_CHECK = 3
 
         private val TAB_DATE: DateTimeFormatter =
             DateTimeFormatter.ofPattern("dd.MM.yy", Locale.ROOT)

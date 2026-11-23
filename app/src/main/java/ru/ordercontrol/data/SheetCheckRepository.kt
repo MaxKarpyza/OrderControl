@@ -52,11 +52,12 @@ class SheetCheckRepository(
 ) {
 
     /**
-     * Скачивает вкладки за сегодня и завтра. Ничего не меняет: применение —
-     * отдельный шаг [apply], чтобы вызывающий получил итог сверки.
+     * Скачивает вкладки ближайших трёх дней — сегодня, завтра и послезавтра.
+     * Ничего не меняет: применение — отдельный шаг [apply], чтобы вызывающий
+     * получил итог сверки.
      */
     suspend fun check(): SheetFetchResult {
-        val result = sheets.fetchTodayAndTomorrow()
+        val result = sheets.fetchRecentDays()
         if (result is SheetFetchResult.Success) {
             onTableFetched()
         }
