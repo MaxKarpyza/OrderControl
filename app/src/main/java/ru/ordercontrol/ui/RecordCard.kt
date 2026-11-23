@@ -77,6 +77,7 @@ fun InfoLine(label: String, value: String) {
         Text(
             text = value,
             style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
             modifier = Modifier
                 .weight(1f)
                 .alignByBaseline(),
