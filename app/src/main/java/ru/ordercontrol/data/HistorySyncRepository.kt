@@ -43,29 +43,19 @@ class HistorySyncRepository(
 
     suspend fun sync(): HistorySyncOutcome = mutex.withLock {
         val syncedAt = now()
-        val since = syncedAt - RETENTION_MS
         val operator = operators.operator()
-
-        val pending = callDao.unsentToHistory(reasons = CloseReason.HISTORY_REASONS, since = since)
-        val byPushedId = pending.associateBy { record ->
-            pushId(operator.id, record.id, record.processedAt ?: record.incomingAt)
-        }
-        val push = byPushedId.map { (id, record) -> record.toPushItem(id) }
+        val (ids, push) = pendingPush(operator)
 
         when (val result = client.sync(operator = operator.displayName, push = push)) {
             is HistorySyncResult.Success -> {
                 // Таблица подтвердила: эти строки больше не нужно отправлять.
-                val accepted = result.accepted.mapNotNull { byPushedId[it]?.id }
-                if (accepted.isNotEmpty()) {
-                    // Отметка одна на всю пачку: время обмена, а не каждой записи.
-                    callDao.markHistorySent(ids = accepted, at = syncedAt)
-                }
+                val pushed = acknowledge(ids, result.accepted, syncedAt)
 
                 // Свои строки из таблицы не показываем: по ним есть своя история.
                 val others = result.rows.filterNot { it.id.startsWith("${operator.id}:") }
                 sharedDao.replaceAll(others.map { it.toEntry(syncedAt) })
 
-                HistorySyncOutcome(pushed = accepted.size, received = others.size)
+                HistorySyncOutcome(pushed = pushed, received = others.size)
             }
 
             HistorySyncResult.Unsupported -> HistorySyncOutcome(
@@ -86,6 +76,71 @@ class HistorySyncRepository(
                 error = result.reason,
             )
         }
+    }
+
+    /**
+     * Выгрузка своей истории: отправляет в общую вкладку адреса, которые
+     * ещё туда не уходили, и ничего не забирает.
+     *
+     * Отличие от [sync] — только в направлении: чужие записи не
+     * запрашиваются и не показываются, поэтому локальная копия общей истории
+     * остаётся прежней. Ручные заказы без телефона не выгружаются: скрипт
+     * такие строки отбрасывает.
+     */
+    suspend fun export(): HistorySyncOutcome = mutex.withLock {
+        val exportedAt = now()
+        val operator = operators.operator()
+        val (ids, push) = pendingPush(operator)
+
+        // Нечего выгружать — не тревожим сеть.
+        if (push.isEmpty()) return@withLock HistorySyncOutcome(pushed = 0, received = 0)
+
+        when (val result = client.sync(operator = operator.displayName, push = push)) {
+            is HistorySyncResult.Success ->
+                HistorySyncOutcome(pushed = acknowledge(ids, result.accepted, exportedAt), received = 0)
+
+            HistorySyncResult.Unsupported -> HistorySyncOutcome(
+                pushed = 0,
+                received = 0,
+                outdatedScript = true,
+            )
+
+            HistorySyncResult.NoNetwork -> HistorySyncOutcome(
+                pushed = 0,
+                received = 0,
+                error = "нет сети",
+            )
+
+            is HistorySyncResult.Failure -> HistorySyncOutcome(
+                pushed = 0,
+                received = 0,
+                error = result.reason,
+            )
+        }
+    }
+
+    /** Свои записи, которые ещё не уходили в общую историю: id строки и сама строка. */
+    private suspend fun pendingPush(operator: Operator): Pair<Map<String, Long>, List<HistoryPushItem>> {
+        val since = now() - RETENTION_MS
+        val pending = callDao.unsentToHistory(reasons = CloseReason.HISTORY_REASONS, since = since)
+        val records = pending.associateBy { record ->
+            pushId(operator.id, record.id, record.processedAt ?: record.incomingAt)
+        }
+        return records.mapValues { it.value.id } to records.map { (id, record) -> record.toPushItem(id) }
+    }
+
+    /** @return сколько записей таблица подтвердила и которые теперь отмечены отправленными. */
+    private suspend fun acknowledge(
+        byPushedId: Map<String, Long>,
+        accepted: Set<String>,
+        at: Long,
+    ): Int {
+        val ids = accepted.mapNotNull { byPushedId[it] }
+        if (ids.isNotEmpty()) {
+            // Отметка одна на всю пачку: время обмена, а не каждой записи.
+            callDao.markHistorySent(ids = ids, at = at)
+        }
+        return ids.size
     }
 
     companion object {

@@ -1,21 +1,23 @@
 package ru.ordercontrol.ui.history
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -77,8 +79,10 @@ fun HistoryScreen(modifier: Modifier = Modifier) {
             FilterRow(
                 filter = viewModel.filter,
                 syncing = viewModel.syncing,
+                exporting = viewModel.exporting,
                 onFilterChange = viewModel::applyFilter,
                 onRefresh = viewModel::refresh,
+                onExport = viewModel::export,
             )
 
             when {
@@ -167,13 +171,15 @@ private fun SearchField(
     )
 }
 
-/** Переключатель «Все / Мои / Не мои» и ручное обновление общей истории. */
+/** Переключатель «Все / Мои / Не мои», выгрузка своих адресов и обновление общей истории. */
 @Composable
 private fun FilterRow(
     filter: HistoryFilter,
     syncing: Boolean,
+    exporting: Boolean,
     onFilterChange: (HistoryFilter) -> Unit,
     onRefresh: () -> Unit,
+    onExport: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -182,31 +188,50 @@ private fun FilterRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        FilterChip(
-            selected = filter == HistoryFilter.ALL,
-            onClick = { onFilterChange(HistoryFilter.ALL) },
-            label = { Text(stringResource(R.string.history_filter_all)) },
-        )
-        FilterChip(
-            selected = filter == HistoryFilter.MINE,
-            onClick = { onFilterChange(HistoryFilter.MINE) },
-            label = { Text(stringResource(R.string.history_filter_mine)) },
-        )
-        FilterChip(
-            selected = filter == HistoryFilter.OTHERS,
-            onClick = { onFilterChange(HistoryFilter.OTHERS) },
-            label = { Text(stringResource(R.string.history_filter_not_mine)) },
-        )
-        Spacer(Modifier.weight(1f))
-        if (syncing) {
-            CircularProgressIndicator(
-                modifier = Modifier
-                    .size(24.dp)
-                    .padding(end = 4.dp),
-                strokeWidth = 2.dp,
+        // Переключатель прокручивается, если кнопки не помещаются на узком экране.
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .horizontalScroll(rememberScrollState()),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            FilterChip(
+                selected = filter == HistoryFilter.ALL,
+                onClick = { onFilterChange(HistoryFilter.ALL) },
+                label = { Text(stringResource(R.string.history_filter_all)) },
             )
-        } else {
-            IconButton(onClick = onRefresh) {
+            FilterChip(
+                selected = filter == HistoryFilter.MINE,
+                onClick = { onFilterChange(HistoryFilter.MINE) },
+                label = { Text(stringResource(R.string.history_filter_mine)) },
+            )
+            FilterChip(
+                selected = filter == HistoryFilter.OTHERS,
+                onClick = { onFilterChange(HistoryFilter.OTHERS) },
+                label = { Text(stringResource(R.string.history_filter_not_mine)) },
+            )
+        }
+        IconButton(onClick = onExport, enabled = !exporting) {
+            if (exporting) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    strokeWidth = 2.dp,
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.Send,
+                    contentDescription = stringResource(R.string.history_export),
+                )
+            }
+        }
+        IconButton(onClick = onRefresh, enabled = !syncing) {
+            if (syncing) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    strokeWidth = 2.dp,
+                )
+            } else {
                 Icon(
                     imageVector = Icons.Default.Refresh,
                     contentDescription = stringResource(R.string.history_refresh),

@@ -34,8 +34,8 @@ android {
         targetSdk = 35
         // Схема версий — doc/versions.md: 0.0.100 и +1 к последнему числу
         // на каждую отдельную доработку.
-        versionCode = 153
-        versionName = "0.0.153"
+        versionCode = 154
+        versionName = "0.0.154"
 
         buildConfigField("String", "UPDATE_REPO", "\"$updateRepo\"")
     }

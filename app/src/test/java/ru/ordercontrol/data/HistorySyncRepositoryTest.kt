@@ -175,6 +175,80 @@ class HistorySyncRepositoryTest {
         assertNull(callDao.byId(id)?.historySentAt)
     }
 
+    @Test
+    fun `выгрузка отправляет только свои ещё не отправленные записи`() = runTest {
+        val unsent = callDao.add(closed(id = 1))
+        val sent = callDao.add(closed(id = 2, processedAt = now - 2_000))
+        callDao.markHistorySent(ids = listOf(sent), at = now - 1_000)
+
+        val outcome = repository.export()
+
+        assertEquals(1, syncer.lastPush.size)
+        assertEquals("опер_37-A3F:$unsent:${now - 1_000}", syncer.lastPush.single().id)
+        assertEquals(1, outcome.pushed)
+        assertEquals(now, callDao.byId(unsent)?.historySentAt)
+    }
+
+    @Test
+    fun `выгрузка не забирает чужие записи`() = runTest {
+        callDao.add(closed(id = 1))
+        syncer.result = HistorySyncResult.Success(
+            rows = listOf(
+                SharedHistoryRow(
+                    id = "опер_12-BCD:9:${now - 2_000}",
+                    author = "опер_12-BCD",
+                    phone = "+79990000009",
+                    address = "Козыря 21-77",
+                    district = "Мирный",
+                    bottles = "1",
+                    comment = "",
+                    processedAt = now - 2_000,
+                ),
+            ),
+            accepted = emptySet(),
+        )
+
+        val outcome = repository.export()
+
+        assertEquals(0, outcome.received)
+        assertTrue(sharedDao.all().isEmpty())
+    }
+
+    @Test
+    fun `выгрузка без новых записей не ходит в сеть`() = runTest {
+        callDao.add(closed(id = 1, phone = null))
+
+        val outcome = repository.export()
+
+        assertTrue(syncer.lastPush.isEmpty())
+        assertEquals(0, outcome.pushed)
+    }
+
+    @Test
+    fun `выгрузка отмечает только подтверждённые таблицей строки`() = runTest {
+        val first = callDao.add(closed(id = 1))
+        val second = callDao.add(closed(id = 2))
+        syncer.result = HistorySyncResult.Success(
+            rows = emptyList(),
+            accepted = setOf("опер_37-A3F:$first:${now - 1_000}"),
+        )
+
+        repository.export()
+
+        assertEquals(now, callDao.byId(first)?.historySentAt)
+        assertNull(callDao.byId(second)?.historySentAt)
+    }
+
+    @Test
+    fun `выгрузка не отправляет записи старше срока хранения и ручные без телефона`() = runTest {
+        callDao.add(closed(id = 1, processedAt = now - 3 * day))
+        callDao.add(closed(id = 2, phone = null))
+
+        repository.export()
+
+        assertTrue(syncer.lastPush.isEmpty())
+    }
+
     private suspend fun syncWith() {
         callDao.add(closed(id = 1))
         repository.sync()
