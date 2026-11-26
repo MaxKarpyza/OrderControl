@@ -85,6 +85,7 @@
     <string name="history_empty_hint">Здесь появятся заявки, отмеченные обработанными.</string>
     <string name="history_total">Обработано: %1$d</string>
     <string name="history_call_time">Звонок</string>
+    <string name="history_call_duration">Длительность</string>
     <string name="history_processed_time">Обработан</string>
     <string name="history_search_hint">Поиск по контактам и адресам</string>
     <string name="history_search_clear">Очистить поиск</string>

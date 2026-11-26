@@ -229,6 +229,14 @@ private fun HistoryCard(record: CallRecord, onRestore: () -> Unit) {
             label = stringResource(R.string.history_call_time),
             value = DisplayFormat.fullDateTime(record.incomingAt),
         )
+        // Длительность есть не у всех звонков: у пропущенных её не бывает,
+        // поэтому строку без неё не рисуем.
+        DisplayFormat.duration(record.durationSec)?.let { duration ->
+            InfoLine(
+                label = stringResource(R.string.history_call_duration),
+                value = duration,
+            )
+        }
         val processedAt = record.processedAt
         InfoLine(
             label = stringResource(R.string.history_processed_time),
