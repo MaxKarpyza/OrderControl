@@ -19,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,15 +32,25 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import java.io.File
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import ru.ordercontrol.AppGraph
 import ru.ordercontrol.BuildConfig
 import ru.ordercontrol.R
 import ru.ordercontrol.update.ApkInstaller
 import ru.ordercontrol.update.UpdateCheckResult
+import ru.ordercontrol.update.UpdateDownloadState
 import ru.ordercontrol.update.UpdateInfo
+
+/**
+ * APK, для которых установщик уже открывали сами. Чтобы возврат на экран
+ * не открывал его повторно, если пользователь отменил установку.
+ */
+private val autoInstallShown = mutableSetOf<String>()
+
+private fun claimAutoInstall(apk: File): Boolean =
+    synchronized(autoInstallShown) { autoInstallShown.add(apk.absolutePath) }
 
 /**
  * Плашка обновления внизу экрана. Ничего не перекрывает и не блокирует:
@@ -49,8 +60,16 @@ import ru.ordercontrol.update.UpdateInfo
 fun UpdateBanner(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val downloads = AppGraph.updateDownloads
+    val downloadState by downloads.state.collectAsState()
     var info by remember { mutableStateOf<UpdateInfo?>(null) }
     var hiddenVersion by remember { mutableStateOf<Int?>(null) }
+    var canInstall by remember { mutableStateOf(ApkInstaller.canInstall(context)) }
+    var installError by remember { mutableStateOf(false) }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        canInstall = ApkInstaller.canInstall(context)
+    }
 
     LaunchedEffect(Unit) {
         if (!AppGraph.settings.isUpdateCheckDue()) return@LaunchedEffect
@@ -70,12 +89,31 @@ fun UpdateBanner(modifier: Modifier = Modifier) {
         }
     }
 
-    val available = info ?: return
+    // Если скачивание уже идёт, плашка показывает его даже без проверки:
+    // так докачка после перезапуска видна сразу.
+    val available = info ?: downloadState.updateInfo ?: return
     // Скрытие привязано к версии: когда выйдет следующая, плашка покажется снова.
     if (hiddenVersion == available.versionCode) return
 
-    val install = remember { UpdateInstallState(context, scope) }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { install.refreshPermission() }
+    // Обрыв загрузки лечится сам: если на диске остался недокачанный файл,
+    // продолжаем его без нажатий.
+    LaunchedEffect(available.versionCode) {
+        downloads.resumeIfStarted(available)
+    }
+
+    val readyApk = (downloadState as? UpdateDownloadState.Ready)?.apk
+    // Скачалось — один раз сами открываем системный установщик, если доступ
+    // разрешён. Если пользователь отменил установку, кнопка «Установить»
+    // останется на плашке.
+    LaunchedEffect(readyApk) {
+        if (readyApk == null || !canInstall) return@LaunchedEffect
+        if (!claimAutoInstall(readyApk)) return@LaunchedEffect
+        installError = !startInstaller(context, readyApk)
+        if (!installError) hiddenVersion = available.versionCode
+    }
+
+    val downloading = downloadState as? UpdateDownloadState.Downloading
+    val failed = downloadState is UpdateDownloadState.Failed
 
     Surface(
         modifier = modifier
@@ -100,12 +138,12 @@ fun UpdateBanner(modifier: Modifier = Modifier) {
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 when {
-                    install.downloading -> {
+                    downloading != null -> {
                         LinearProgressIndicator(
-                            progress = { install.percent / 100f },
+                            progress = { downloading.percent / 100f },
                             modifier = Modifier.fillMaxWidth(),
                         )
-                        install.status?.let { status ->
+                        downloading.status?.let { status ->
                             Text(
                                 text = status,
                                 style = MaterialTheme.typography.bodySmall,
@@ -113,12 +151,17 @@ fun UpdateBanner(modifier: Modifier = Modifier) {
                             )
                         }
                     }
-                    install.error != null -> Text(
-                        text = install.error.orEmpty(),
+                    installError -> Text(
+                        text = stringResource(R.string.update_install_failed),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                     )
-                    !install.canInstall -> Text(
+                    failed -> Text(
+                        text = stringResource(R.string.update_download_failed),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    !canInstall -> Text(
                         text = stringResource(R.string.update_allow_install),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -126,13 +169,26 @@ fun UpdateBanner(modifier: Modifier = Modifier) {
                 }
             }
             TextButton(
-                onClick = { install.start(available) { hiddenVersion = available.versionCode } },
-                enabled = !install.downloading,
+                onClick = {
+                    installError = false
+                    when {
+                        !canInstall -> ApkInstaller.openInstallPermission(context)
+                        readyApk != null -> {
+                            installError = !startInstaller(context, readyApk)
+                            if (!installError) hiddenVersion = available.versionCode
+                        }
+                        else -> downloads.start(available)
+                    }
+                },
+                enabled = downloading == null,
             ) {
                 Text(
                     stringResource(
-                        if (install.canInstall) R.string.update_action
-                        else R.string.update_allow_install_action,
+                        when {
+                            readyApk != null && canInstall -> R.string.update_install
+                            !canInstall -> R.string.update_allow_install_action
+                            else -> R.string.update_action
+                        },
                     ),
                 )
             }
@@ -168,12 +224,26 @@ private sealed interface CheckState {
 fun UpdateSection() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val downloadState by AppGraph.updateDownloads.state.collectAsState()
     var state by remember { mutableStateOf<CheckState>(CheckState.Idle) }
-    val install = remember { UpdateInstallState(context, scope) }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { install.refreshPermission() }
+    var canInstall by remember { mutableStateOf(ApkInstaller.canInstall(context)) }
+    var installError by remember { mutableStateOf(false) }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        canInstall = ApkInstaller.canInstall(context)
+    }
 
     val noNetwork = stringResource(R.string.update_no_network)
     val failed = stringResource(R.string.update_failed)
+
+    val readyApk = (downloadState as? UpdateDownloadState.Ready)?.apk
+    LaunchedEffect(readyApk) {
+        if (readyApk == null || !canInstall) return@LaunchedEffect
+        if (!claimAutoInstall(readyApk)) return@LaunchedEffect
+        installError = !startInstaller(context, readyApk)
+    }
+
+    val available = (state as? CheckState.Available)?.info ?: downloadState.updateInfo
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
@@ -190,7 +260,11 @@ fun UpdateSection() {
                 state = CheckState.Checking
                 scope.launch {
                     state = try {
-                        when (val result = AppGraph.updates.check()) {
+                        val result = AppGraph.updates.check()
+                        if (result is UpdateCheckResult.Available) {
+                            AppGraph.updateDownloads.resumeIfStarted(result.info)
+                        }
+                        when (result) {
                             is UpdateCheckResult.Available -> CheckState.Available(result.info)
                             UpdateCheckResult.UpToDate -> CheckState.UpToDate
                             UpdateCheckResult.NoNetwork -> CheckState.Error(noNetwork)
@@ -212,43 +286,53 @@ fun UpdateSection() {
                 ),
             )
         }
+        if (available != null) {
+            Text(
+                text = stringResource(R.string.update_available, available.versionName),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            TextButton(
+                onClick = {
+                    installError = false
+                    when {
+                        !canInstall -> ApkInstaller.openInstallPermission(context)
+                        readyApk != null -> installError = !startInstaller(context, readyApk)
+                        else -> AppGraph.updateDownloads.start(available)
+                    }
+                },
+                enabled = downloadState !is UpdateDownloadState.Downloading,
+            ) {
+                Text(
+                    stringResource(
+                        when {
+                            readyApk != null && canInstall -> R.string.update_install
+                            !canInstall -> R.string.update_allow_install_action
+                            else -> R.string.update_download
+                        },
+                    ),
+                )
+            }
+        }
         when (val current = state) {
             CheckState.UpToDate -> Text(
                 text = stringResource(R.string.update_up_to_date),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            is CheckState.Available -> {
-                Text(
-                    text = stringResource(R.string.update_available, current.info.versionName),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                TextButton(
-                    onClick = { install.start(current.info) {} },
-                    enabled = !install.downloading,
-                ) {
-                    Text(
-                        stringResource(
-                            if (install.canInstall) R.string.update_download
-                            else R.string.update_allow_install_action,
-                        ),
-                    )
-                }
-            }
             is CheckState.Error -> Text(
                 text = current.text,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
-            CheckState.Idle, CheckState.Checking -> Unit
+            CheckState.Idle, CheckState.Checking, is CheckState.Available -> Unit
         }
-        if (install.downloading) {
+        (downloadState as? UpdateDownloadState.Downloading)?.let { downloading ->
             LinearProgressIndicator(
-                progress = { install.percent / 100f },
+                progress = { downloading.percent / 100f },
                 modifier = Modifier.fillMaxWidth(),
             )
-            install.status?.let { status ->
+            downloading.status?.let { status ->
                 Text(
                     text = status,
                     style = MaterialTheme.typography.bodySmall,
@@ -256,78 +340,23 @@ fun UpdateSection() {
                 )
             }
         }
-        install.error?.let {
-            Text(
-                text = it,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
+        if (downloadState is UpdateDownloadState.Failed) Text(
+            text = stringResource(R.string.update_download_failed),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+        if (installError) Text(
+            text = stringResource(R.string.update_install_failed),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
     }
 }
 
-/** Скачивание APK и запуск системного установщика. */
-private class UpdateInstallState(
-    private val context: Context,
-    private val scope: CoroutineScope,
-) {
-
-    var percent by mutableStateOf(0)
-        private set
-
-    var downloading by mutableStateOf(false)
-        private set
-
-    var error by mutableStateOf<String?>(null)
-
-    /** Сообщение о ходе загрузки: повтор запроса или докачка. */
-    var status by mutableStateOf<String?>(null)
-        private set
-
-    var canInstall by mutableStateOf(ApkInstaller.canInstall(context))
-        private set
-
-    /** Пользователь мог вернуться из системных настроек с выданным доступом. */
-    fun refreshPermission() {
-        canInstall = ApkInstaller.canInstall(context)
-    }
-
-    fun start(info: UpdateInfo, onInstallerOpened: () -> Unit) {
-        if (downloading) return
-        if (!canInstall) {
-            ApkInstaller.openInstallPermission(context)
-            return
-        }
-        error = null
-        scope.launch {
-            downloading = true
-            percent = 0
-            status = null
-            val apk = try {
-                AppGraph.updates.download(
-                    info,
-                    onProgress = { percent = it },
-                    onStatus = { status = it },
-                )
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                error = context.getString(R.string.update_download_failed)
-                downloading = false
-                return@launch
-            } finally {
-                status = null
-            }
-            try {
-                ApkInstaller.install(context, apk)
-                onInstallerOpened()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                error = context.getString(R.string.update_install_failed)
-            } finally {
-                downloading = false
-            }
-        }
-    }
+/** Запускает системный установщик; `false` — открыть его не удалось. */
+private fun startInstaller(context: Context, apk: File): Boolean = try {
+    ApkInstaller.install(context, apk)
+    true
+} catch (_: Exception) {
+    false
 }

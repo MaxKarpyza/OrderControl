@@ -32,4 +32,10 @@ class UpdateRepository(
         onProgress: (Int) -> Unit,
         onStatus: (String) -> Unit = {},
     ): File = client.download(info, onProgress, onStatus)
+
+    /** Сколько байт обновления уже скачано в недокачанный `.part`. */
+    fun partialBytes(info: UpdateInfo): Long = client.partialBytes(info)
+
+    /** Уже скачанный и проверенный APK этого релиза; `null` — файла нет. */
+    fun completedApk(info: UpdateInfo): File? = client.completedApk(info)
 }

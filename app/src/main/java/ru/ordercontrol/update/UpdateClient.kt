@@ -44,8 +44,9 @@ sealed interface UpdateCheckResult {
  * Скачивание умеет докачивать: недокачанный файл лежит в `filesDir/updates`
  * под именем `<apk>.part` и при следующей попытке запрос продолжается с
  * нужного места (`Range`/`If-Range`). Обрыв связи не отменяет загрузку:
- * запрос повторяется несколько раз с паузой, каждый раз продолжая с
- * места обрыва.
+ * запрос повторяется с паузой, каждый раз продолжая с места обрыва, пока
+ * попытки не начнут приносить новые байты. Файл `.part` остаётся на диске
+ * и после неудачи — следующий запуск докачает с него.
  */
 class UpdateClient(
     private val context: Context,
@@ -83,23 +84,26 @@ class UpdateClient(
     ): File = withContext(Dispatchers.IO) {
         // filesDir, а не cacheDir: систему просят «освободить место» и чистить
         // кэш прямо до подтверждения установки — APK не должен исчезнуть.
-        val dir = File(context.filesDir, UPDATES_DIR).apply { mkdirs() }
-        val apkName = info.apkName.substringAfterLast('/').substringAfterLast('\\')
+        val dir = updatesDir()
+        val apkName = apkFileName(info)
         val target = File(dir, apkName)
         val part = File(dir, "$apkName.part")
         val etag = File(dir, "$apkName.etag")
         cleanUp(dir, keep = setOf(apkName, part.name, etag.name))
         if (target.exists()) target.delete()
 
-        var attempt = 0
+        // Повторяем, пока попытки приносят новые байты. Сдаёмся, только если
+        // несколько попыток подряд ничего не докачали: значит, сеть или
+        // сервер сейчас недоступны, и ждать дальше бессмысленно.
+        var stalled = 0
         while (true) {
-            val downloaded = part.length()
-            if (downloaded > 0) {
+            val before = part.length()
+            if (before > 0) {
                 status(
                     onStatus,
                     context.getString(
                         R.string.update_resume,
-                        DownloadSupport.percentOf(downloaded, info.sizeBytes),
+                        DownloadSupport.percentOf(before, info.sizeBytes),
                     ),
                 )
             }
@@ -109,12 +113,13 @@ class UpdateClient(
             } catch (e: FatalDownloadException) {
                 throw e
             } catch (e: IOException) {
-                attempt++
-                if (attempt > MAX_ATTEMPTS) {
+                val progressed = part.length() > before
+                stalled = if (progressed) 0 else stalled + 1
+                if (stalled > MAX_STALLED_ATTEMPTS) {
                     throw IOException(context.getString(R.string.update_download_failed), e)
                 }
-                status(onStatus, context.getString(R.string.update_retrying, attempt))
-                delay(backoffMs(attempt))
+                status(onStatus, context.getString(R.string.update_retrying, stalled))
+                delay(if (progressed) RESUMED_PAUSE_MS else backoffMs(stalled))
             }
         }
 
@@ -126,6 +131,34 @@ class UpdateClient(
         verify(target, info)
         target
     }
+
+    /** Сколько байт обновления уже лежит в недокачанном `.part`. */
+    fun partialBytes(info: UpdateInfo): Long = partFile(info).length()
+
+    /**
+     * Уже скачанный и проверенный APK этого релиза; `null` — файла нет.
+     * Битый или чужой файл удаляется.
+     */
+    fun completedApk(info: UpdateInfo): File? {
+        val target = File(updatesDir(), apkFileName(info))
+        if (!target.isFile) return null
+        return try {
+            verify(target, info)
+            target
+        } catch (_: IOException) {
+            target.delete()
+            null
+        }
+    }
+
+    private fun updatesDir(): File =
+        File(context.filesDir, UPDATES_DIR).apply { mkdirs() }
+
+    private fun apkFileName(info: UpdateInfo): String =
+        info.apkName.substringAfterLast('/').substringAfterLast('\\')
+
+    private fun partFile(info: UpdateInfo): File =
+        File(updatesDir(), "${apkFileName(info)}.part")
 
     /**
      * Одна попытка скачивания. Продолжает файл `.part` с места обрыва,
@@ -142,10 +175,10 @@ class UpdateClient(
         try {
             val code = connection.responseCode
             if (code == HTTP_RANGE_NOT_SATISFIABLE) {
-                // Либо файл уже скачан целиком, либо сервер не смог отдать
-                // нужный кусок.
-                if (info.sizeBytes > 0 && part.length() == info.sizeBytes) return
-                part.delete()
+                // Сервер считает, что отдавать с этого места нечего: либо файл
+                // уже скачан целиком, либо `.part` больше самого файла.
+                // Пусть решает проверка APK после скачивания.
+                if (part.length() > 0) return
                 throw IOException("сервер не смог продолжить загрузку")
             }
             if (code != HttpURLConnection.HTTP_OK &&
@@ -391,7 +424,7 @@ class UpdateClient(
     }
 
     private fun backoffMs(attempt: Int): Long =
-        (BASE_BACKOFF_MS shl (attempt - 1)).coerceAtMost(MAX_BACKOFF_MS)
+        (BASE_BACKOFF_MS shl (attempt - 1).coerceIn(0, 6)).coerceAtMost(MAX_BACKOFF_MS)
 
     private companion object {
         const val UPDATES_DIR = "updates"
@@ -400,10 +433,13 @@ class UpdateClient(
         const val READ_TIMEOUT_MS = 30_000
         const val BUFFER_SIZE = 64 * 1024
         const val USER_AGENT = "OrderControl (Android)"
-        const val MAX_ATTEMPTS = 4
+        // Пока попытки приносят байты, счётчик обнуляется: медленную, но
+        // живую загрузку не обрываем. Это предел именно «пустых» попыток.
+        const val MAX_STALLED_ATTEMPTS = 8
         const val MAX_REDIRECTS = 5
         const val BASE_BACKOFF_MS = 1_000L
-        const val MAX_BACKOFF_MS = 8_000L
+        const val MAX_BACKOFF_MS = 30_000L
+        const val RESUMED_PAUSE_MS = 500L
         const val HTTP_RANGE_NOT_SATISFIABLE = 416
     }
 }

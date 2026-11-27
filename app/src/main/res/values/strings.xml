@@ -172,6 +172,7 @@
     <string name="update_failed">Не удалось проверить обновление</string>
     <string name="update_download">Скачать и установить</string>
     <string name="update_action">Обновить</string>
+    <string name="update_install">Установить</string>
     <string name="update_downloading">Загрузка… %1$d%%</string>
     <string name="update_download_failed">Не удалось скачать обновление</string>
     <string name="update_retrying">Связь прервалась, повтор %1$d…</string>

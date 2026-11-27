@@ -14,6 +14,7 @@ import ru.ordercontrol.data.SheetsClient
 import ru.ordercontrol.data.db.AddressAliasDao
 import ru.ordercontrol.data.db.AppDatabase
 import ru.ordercontrol.data.db.SharedHistoryDao
+import ru.ordercontrol.update.UpdateDownloadManager
 import ru.ordercontrol.update.UpdateRepository
 
 /** Ручной контейнер зависимостей: приложение маленькое, DI-фреймворк не нужен. */
@@ -84,6 +85,11 @@ object AppGraph {
     }
 
     val updates: UpdateRepository by lazy { UpdateRepository(appContext, settings) }
+
+    /** Скачивание обновления переживает уход с экрана и перезапуск приложения. */
+    val updateDownloads: UpdateDownloadManager by lazy {
+        UpdateDownloadManager(appContext, updates, settings)
+    }
 
     fun init(context: Context) {
         appContext = context.applicationContext
