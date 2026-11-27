@@ -17,7 +17,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -79,10 +78,8 @@ fun HistoryScreen(modifier: Modifier = Modifier) {
             FilterRow(
                 filter = viewModel.filter,
                 syncing = viewModel.syncing,
-                exporting = viewModel.exporting,
                 onFilterChange = viewModel::applyFilter,
                 onRefresh = viewModel::refresh,
-                onExport = viewModel::export,
             )
 
             when {
@@ -171,15 +168,13 @@ private fun SearchField(
     )
 }
 
-/** Переключатель «Все / Мои / Не мои», выгрузка своих адресов и обновление общей истории. */
+/** Переключатель «Все / Мои / Не мои» и обновление общей истории. */
 @Composable
 private fun FilterRow(
     filter: HistoryFilter,
     syncing: Boolean,
-    exporting: Boolean,
     onFilterChange: (HistoryFilter) -> Unit,
     onRefresh: () -> Unit,
-    onExport: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -211,19 +206,6 @@ private fun FilterRow(
                 onClick = { onFilterChange(HistoryFilter.OTHERS) },
                 label = { Text(stringResource(R.string.history_filter_not_mine)) },
             )
-        }
-        IconButton(onClick = onExport, enabled = !exporting) {
-            if (exporting) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    strokeWidth = 2.dp,
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Default.Send,
-                    contentDescription = stringResource(R.string.history_export),
-                )
-            }
         }
         IconButton(onClick = onRefresh, enabled = !syncing) {
             if (syncing) {

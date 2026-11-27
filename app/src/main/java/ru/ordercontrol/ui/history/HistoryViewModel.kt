@@ -35,12 +35,8 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
     var filter by mutableStateOf(HistoryFilter.ALL)
         private set
 
-    /** Идёт обмен общей историей. */
+    /** Идёт обновление общей истории. */
     var syncing by mutableStateOf(false)
-        private set
-
-    /** Идёт выгрузка своих адресов в общую историю. */
-    var exporting by mutableStateOf(false)
         private set
 
     /** Сообщение для снекбара после возврата записи или обновления. */
@@ -131,7 +127,12 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    /** Ручное обновление общей истории: кнопка на вкладке. */
+    /**
+     * Ручное обновление общей истории: кнопка на вкладке.
+     *
+     * Сначала синхронизация, затем выгрузка своих адресов в фоне —
+     * выгрузка не блокирует кнопку и не меняет сообщение про обновление.
+     */
     fun refresh() {
         if (syncing) return
         syncing = true
@@ -150,33 +151,21 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
             } finally {
                 syncing = false
             }
-        }
-    }
 
-    /**
-     * Выгрузка своих адресов в общую историю: кнопка на вкладке.
-     *
-     * Отправляются только записи, которых там ещё нет; чужие не забираются —
-     * для этого есть кнопка обновления.
-     */
-    fun export() {
-        if (exporting) return
-        exporting = true
-        viewModelScope.launch {
-            val context = getApplication<Application>()
-            try {
-                val outcome = AppGraph.historySync.export()
-                message = when {
-                    outcome.outdatedScript -> context.getString(R.string.history_sync_outdated)
-                    outcome.error != null ->
-                        context.getString(R.string.history_export_error, outcome.error)
-                    outcome.pushed == 0 -> context.getString(R.string.history_export_empty)
-                    else -> context.getString(R.string.history_export_done, outcome.pushed)
+            viewModelScope.launch {
+                try {
+                    val exportOutcome = AppGraph.historySync.export()
+                    val exportMessage = when {
+                        exportOutcome.outdatedScript -> null
+                        exportOutcome.error != null ->
+                            context.getString(R.string.history_export_error, exportOutcome.error)
+                        exportOutcome.pushed == 0 -> null
+                        else -> context.getString(R.string.history_export_done, exportOutcome.pushed)
+                    }
+                    if (exportMessage != null) message = exportMessage
+                } catch (_: Exception) {
+                    message = context.getString(R.string.main_error)
                 }
-            } catch (_: Exception) {
-                message = context.getString(R.string.main_error)
-            } finally {
-                exporting = false
             }
         }
     }
