@@ -97,9 +97,7 @@
     <string name="history_filter_mine">Мои</string>
     <string name="history_filter_not_mine">Не мои</string>
     <string name="history_refresh">Обновить историю</string>
-    <string name="history_export">Выгрузить историю</string>
     <string name="history_export_done">Выгружено адресов: %1$d</string>
-    <string name="history_export_empty">Новых адресов для выгрузки нет</string>
     <string name="history_export_error">Не удалось выгрузить историю: %1$s</string>
     <string name="history_sync_done">Общая история обновлена: чужих записей %1$d</string>
     <string name="history_sync_error">Не удалось обновить историю: %1$s</string>
